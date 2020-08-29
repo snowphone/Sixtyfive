@@ -1,0 +1,13 @@
+{
+	"backup_location": "C:\\Users\\mjo97\\Downloads\\backup",
+	"applications": [
+		{
+			"name": "splintercell3.exe",
+			"save_path": "C:\\ProgramData\\Ubisoft\\Tom Clancy's Splinter Cell Chaos Theory"
+		},
+		{
+			"name": "SpaceSniffer.exe",
+			"save_path": "C:\\Users\\mjo97\\Downloads\\temp"
+		}
+	]
+}
