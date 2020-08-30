@@ -2,7 +2,8 @@
 import json
 import logging
 import os
-from shutil import copy, make_archive
+from shutil import copy, make_archive, rmtree
+import tempfile
 from typing import List
 
 from psutil import Process, process_iter, wait_procs
@@ -45,15 +46,15 @@ class SavefileManager:
 		proc_name = proc.info["name"]
 		self.names.append(proc_name)
 
-		src_path = next(config["save_path"] for config in self.configs
+		src_path: str = next(config["save_path"] for config in self.configs
 		                if config["name"] == proc_name)
-		dst_path = os.path.join(self.backup_root, proc_name[:-4])
 
 		print(f"{proc_name} is terminated. Backup savefiles...", end=' ')
-		make_archive(dst_path, "zip", src_path)
+		make_archive(src_path[:-4], "zip", src_path)
 
-		data_path = dst_path + ".zip"
-		self._upload(data_path, proc_name)
+		archive_path = src_path + ".zip"
+		self._upload(archive_path, proc_name)
+		rmtree(archive_path)
 		return
 
 	def _upload(self, data_path: str, proc_name: str):
