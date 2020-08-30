@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from shutil import copy, make_archive, rmtree
+from sys import stderr
 from typing import List
 from zipfile import ZipFile
 
@@ -45,7 +46,7 @@ class Sixtyfive:
 		return resp.content
 
 	def watch(self):
-		print(f"Watching {self.names}...")
+		log.info(f"Watching {self.names}...")
 		while True:
 			try:
 				proc: Process = next(
@@ -54,7 +55,7 @@ class Sixtyfive:
 				name = proc.info["name"]
 
 				self.names.remove(name)
-				print(f"{name} started")
+				log.info(f"{name} started")
 				self._register_process(proc)
 			except StopIteration:
 				continue
@@ -64,11 +65,11 @@ class Sixtyfive:
 			config: dict = next(conf for conf in self.configs
 			                    if conf["name"] == proc_name)
 		except StopIteration as e:
-			raise RuntimeError(
-			    f"{proc_name} does not exist in the configuration")
+			log.error(f"{proc_name} does not exist in the configuration")
+			raise
 
 		archive_name = proc_name[:-4] + ".zip"
-		print(f"Downloading data of {proc_name}...")
+		log.info(f"Downloading data of {proc_name}...")
 		data = self._download(f"data/{archive_name}")
 
 		with open(archive_name, "wb") as f:
@@ -78,7 +79,7 @@ class Sixtyfive:
 		self._unpack_archive(archive_name, restore_path)
 
 		os.remove(archive_name)
-		print(f"Restoration complete!")
+		log.info(f"Restoration completed!")
 		return
 
 	def _unpack_archive(self, archive_path, dst):
@@ -92,13 +93,14 @@ class Sixtyfive:
 
 	def _backup_savefile(self, proc: Process):
 		proc_name = proc.info["name"]
+		log.info(f"{proc_name} is terminated.")
 		self.names.append(proc_name)
 
 		src_path: str = next(config["save_path"] for config in self.configs
 		                     if config["name"] == proc_name)
 
-		print(f"{proc_name} is terminated. Backup savefiles...")
 		make_archive(proc_name[:-4], "zip", src_path)
+		log.info(f"Archived files in {src_path}")
 
 		archive_path = proc_name[:-4] + ".zip"
 		self._upload(archive_path, proc_name)
@@ -119,13 +121,13 @@ class Sixtyfive:
 			response: Response = post(f"{self.URL}/upload",
 			                          f.read(),
 			                          headers=header)
-		print("Done!" if response.ok else f"Failed due to {response.content}")
+		log.info("Uploaded successfully!" if response.ok else f"Failed due to {response.content}")
 		return
 
 
 def main(args):
 	observer = Sixtyfive("configs.json")
-	if args.proc_name:
+	if args.download:
 		observer.restore(args.proc_name)
 	elif args.list:
 		txt = json.dumps(observer.full_configs, indent=True)
@@ -135,9 +137,13 @@ def main(args):
 
 
 if __name__ == "__main__":
+	log = logging.getLogger("sixtyfive")
+	log.setLevel(logging.INFO)
+	log.addHandler(logging.StreamHandler(stderr))
+
 	parser = argparse.ArgumentParser()
-	parser.add_argument("-p",
-	                    "--proc_name",
+	parser.add_argument("-d",
+	                    "--download",
 	                    help="The name of the process for restoration")
 	parser.add_argument("-l", 
 						"--list",
