@@ -95,9 +95,15 @@ class Sixtyfive:
 		proc_name = proc.info["name"]
 		log.info(f"{proc_name} is terminated.")
 		self.names.append(proc_name)
+		self.backup(proc_name)
 
-		src_path: str = next(config["save_path"] for config in self.configs
+	def backup(self, proc_name: str):
+		try:
+			src_path: str = next(config["save_path"] for config in self.configs
 		                     if config["name"] == proc_name)
+		except StopIteration as e:
+			log.error(f"{proc_name} does not exist in the configuration")
+			raise
 
 		make_archive(proc_name[:-4], "zip", src_path)
 		log.info(f"Archived files in {src_path}")
@@ -128,7 +134,9 @@ class Sixtyfive:
 def main(args):
 	observer = Sixtyfive("configs.json")
 	if args.download:
-		observer.restore(args.proc_name)
+		observer.restore(args.download)
+	elif args.upload:
+		observer.backup(args.upload)
 	elif args.list:
 		txt = json.dumps(observer.full_configs, indent=True)
 		print(txt)
@@ -144,7 +152,10 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-d",
 	                    "--download",
-	                    help="The name of the process for restoration")
+	                    help="The name of the process for manual restoration")
+	parser.add_argument("-u",
+	                    "--upload",
+	                    help="The name of the process for manual backup")
 	parser.add_argument("-l", 
 						"--list",
 						help="Show stored configurations",
