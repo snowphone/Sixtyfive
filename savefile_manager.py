@@ -6,9 +6,13 @@ from shutil import copy, make_archive
 from typing import List
 
 from psutil import Process, process_iter, wait_procs
+from requests import Response, post
 
 
 class SavefileManager:
+	TOKEN = "m9BGWnHvSw0AAAAAAAAAAdBGNzWtnFBRbPz7yknRC9anv9IKMjU7rEdw5ifv3k7V"
+	URL = "https://content.dropboxapi.com/2/files/upload"
+
 	def __init__(self, configs_path):
 		with open(configs_path, "rt") as f:
 			configs: dict = json.load(f)
@@ -29,15 +33,15 @@ class SavefileManager:
 
 				self.names.remove(name)
 				print(f"{name} started")
-				self.register_process(proc)
+				self._register_process(proc)
 			except StopIteration:
 				continue
 
-	def register_process(self, proc: Process):
-		wait_procs([proc], callback=self.backup_savefile)
+	def _register_process(self, proc: Process):
+		wait_procs([proc], callback=self._backup_savefile)
 		return
 
-	def backup_savefile(self, proc: Process):
+	def _backup_savefile(self, proc: Process):
 		proc_name = proc.info["name"]
 		self.names.append(proc_name)
 
@@ -45,8 +49,27 @@ class SavefileManager:
 		                if config["name"] == proc_name)
 		dst_path = os.path.join(self.backup_root, proc_name[:-4])
 
-		print(f"{proc_name} is terminated. Backup savefiles")
+		print(f"{proc_name} is terminated. Backup savefiles...", end=' ')
 		make_archive(dst_path, "zip", src_path)
+
+		data_path = dst_path + ".zip"
+		self._upload(data_path, proc_name)
+		return
+
+	def _upload(self, data_path: str, proc_name: str):
+		header = {
+		    "Authorization": f"Bearer {self.TOKEN}",
+		    "Content-Type": "application/octet-stream",
+		    "Dropbox-API-Arg": json.dumps({
+		        "path": f"data/{proc_name[:-4]}.zip",
+		        "mode": {
+		            ".tag": "overwrite"
+		        }
+		    })
+		}
+		with open(data_path, "rb") as f:
+			resp: Response = post(self.URL, f.read(), headers=header)
+		print("Done!" if resp.ok else f"Failed due to {resp.reason}")
 		return
 
 
