@@ -12,24 +12,30 @@ from requests import Response, post
 
 
 class Sixtyfive:
-	TOKEN = "m9BGWnHvSw0AAAAAAAAAAdBGNzWtnFBRbPz7yknRC9anv9IKMjU7rEdw5ifv3k7V"
 	URL = "https://content.dropboxapi.com/2/files"
 
-	BASE_HEADER = {
-	    "Authorization": f"Bearer {TOKEN}",
-	    "Content-Type": "application/octet-stream",
-	}
 
 	def __init__(self, configs_name):
+		self.token = self._read_token()
+		self.header_base = {
+			"Authorization": f"Bearer {self.token}",
+			"Content-Type": "application/octet-stream",
+			}
+
 		configs = json.loads(self._download(configs_name))
 
 		self.configs: List[dict] = configs["applications"]
 		self.names: List[str] = [conf["name"] for conf in self.configs]
+
 		return
+
+	def _read_token(self, path="token.txt") -> str:
+		with open(path, "rt") as f:
+			return f.readline().strip()
 
 	def _download(self, name: str):
 		header = {
-		    **self.BASE_HEADER, 
+		    **self.header_base,
 			"Dropbox-API-Arg": json.dumps({
 		        "path": f"/{name}",
 		    })
@@ -101,7 +107,7 @@ class Sixtyfive:
 
 	def _upload(self, data_path: str, proc_name: str):
 		header = {
-		    **self.BASE_HEADER, 
+		    **self.header_base, 
 			"Dropbox-API-Arg": json.dumps({
 		        "path": f"/data/{proc_name[:-4]}.zip",
 		        "mode": {
@@ -121,6 +127,8 @@ def main(args):
 	observer = Sixtyfive("configs.json")
 	if args.proc_name:
 		observer.restore(args.proc_name)
+	elif args.list:
+		print(observer.configs)
 	else:
 		observer.watch()
 
@@ -130,6 +138,10 @@ if __name__ == "__main__":
 	parser.add_argument("-p",
 	                    "--proc_name",
 	                    help="The name of the process for restoration")
+	parser.add_argument("-l", 
+						"--list",
+						help="Show stored configurations",
+						action="store_true")
 
 	args = parser.parse_args()
 	main(args)
