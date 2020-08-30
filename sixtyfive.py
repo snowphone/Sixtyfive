@@ -22,9 +22,9 @@ class Sixtyfive:
 			"Content-Type": "application/octet-stream",
 			}
 
-		configs = json.loads(self._download(configs_name))
+		self.full_configs = json.loads(self._download(configs_name))
 
-		self.configs: List[dict] = configs["applications"]
+		self.configs: List[dict] = self.full_configs["applications"]
 		self.names: List[str] = [conf["name"] for conf in self.configs]
 
 		return
@@ -128,7 +128,8 @@ def main(args):
 	if args.proc_name:
 		observer.restore(args.proc_name)
 	elif args.list:
-		print(observer.configs)
+		txt = json.dumps(observer.full_configs, indent=True)
+		print(txt)
 	else:
 		observer.watch()
 
