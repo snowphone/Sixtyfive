@@ -3,8 +3,9 @@ import argparse
 import json
 import logging
 import os
-from shutil import copy, make_archive, rmtree, unpack_archive
+from shutil import copy, make_archive, rmtree
 from typing import List
+from zipfile import ZipFile
 
 from psutil import Process, process_iter, wait_procs
 from requests import Response, post
@@ -22,15 +23,14 @@ class SavefileManager:
 	def __init__(self, configs_name):
 		configs = json.loads(self._download(configs_name))
 
-		self.backup_root: str = configs["backup_location"]
 		self.configs: List[dict] = configs["applications"]
 		self.names: List[str] = [conf["name"] for conf in self.configs]
 		return
 
 	def _download(self, name: str):
 		header = {
-		    **self.BASE_HEADER, "Dropbox-API-Arg":
-		    json.dumps({
+		    **self.BASE_HEADER, 
+			"Dropbox-API-Arg": json.dumps({
 		        "path": f"/{name}",
 		    })
 		}
@@ -61,19 +61,24 @@ class SavefileManager:
 			raise RuntimeError(
 			    f"{proc_name} does not exist in the configuration")
 
-		archive_name = proc_name.replace('.exe', '.zip')
-		print(f"Downloading data of {proc_name}...", end=' ')
+		archive_name = proc_name[:-4] + ".zip"
+		print(f"Downloading data of {proc_name}...")
 		data = self._download(f"data/{archive_name}")
 
 		with open(archive_name, "wb") as f:
 			f.write(data)
 
 		restore_path = config["save_path"]
-		unpack_archive(archive_name, restore_path, "zip")
+		self._unpack_archive(archive_name, restore_path)
 
 		os.remove(archive_name)
 		print(f"Restoration complete!")
 		return
+
+	def _unpack_archive(self, archive_path, dst):
+		archive = ZipFile(archive_path)
+		archive.extractall(dst)
+		archive.close()
 
 	def _register_process(self, proc: Process):
 		wait_procs([proc], callback=self._backup_savefile)
@@ -86,19 +91,19 @@ class SavefileManager:
 		src_path: str = next(config["save_path"] for config in self.configs
 		                     if config["name"] == proc_name)
 
-		print(f"{proc_name} is terminated. Backup savefiles...", end=' ')
-		make_archive(src_path[:-4], "zip", src_path)
+		print(f"{proc_name} is terminated. Backup savefiles...")
+		make_archive(proc_name[:-4], "zip", src_path)
 
-		archive_path = src_path + ".zip"
+		archive_path = proc_name[:-4] + ".zip"
 		self._upload(archive_path, proc_name)
-		rmtree(archive_path)
+		os.remove(archive_path)
 		return
 
 	def _upload(self, data_path: str, proc_name: str):
 		header = {
-		    **self.BASE_HEADER, "Dropbox-API-Arg":
-		    json.dumps({
-		        "path": f"data/{proc_name[:-4]}.zip",
+		    **self.BASE_HEADER, 
+			"Dropbox-API-Arg": json.dumps({
+		        "path": f"/data/{proc_name[:-4]}.zip",
 		        "mode": {
 		            ".tag": "overwrite"
 		        }
@@ -108,7 +113,7 @@ class SavefileManager:
 			response: Response = post(f"{self.URL}/upload",
 			                          f.read(),
 			                          headers=header)
-		print("Done!" if response.ok else f"Failed due to {response.reason}")
+		print("Done!" if response.ok else f"Failed due to {response.content}")
 		return
 
 
