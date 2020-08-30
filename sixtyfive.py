@@ -11,7 +11,7 @@ from psutil import Process, process_iter, wait_procs
 from requests import Response, post
 
 
-class SavefileManager:
+class Sixtyfive:
 	TOKEN = "m9BGWnHvSw0AAAAAAAAAAdBGNzWtnFBRbPz7yknRC9anv9IKMjU7rEdw5ifv3k7V"
 	URL = "https://content.dropboxapi.com/2/files"
 
@@ -118,7 +118,7 @@ class SavefileManager:
 
 
 def main(args):
-	observer = SavefileManager("configs.json")
+	observer = Sixtyfive("configs.json")
 	if args.proc_name:
 		observer.restore(args.proc_name)
 	else:
