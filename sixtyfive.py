@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from shutil import copy, make_archive, rmtree
-from sys import stderr
+from sys import argv, stderr
 from typing import List
 from zipfile import ZipFile
 
@@ -82,6 +82,34 @@ class Sixtyfive:
 		log.info(f"Restoration completed!")
 		return
 
+	def add_config(self, proc_name: str, save_path: str):
+		configs = json.loads(self._download("configs.json"))
+
+		# If a process already exists, remove the previous one.
+		if legacy := next((it for it in configs["applications"] 
+			if it["name"]  == proc_name or it["save_path"] == save_path), None):
+			configs["applications"].remove(legacy)
+
+		configs["applications"].append({
+			"name": proc_name,
+			"save_path": save_path
+			})
+
+		serialized = json.dumps(configs, indent=True)
+
+		header = {
+		    **self.header_base, 
+			"Dropbox-API-Arg": json.dumps({
+		        "path": "/configs.json",
+		        "mode": {
+		            ".tag": "overwrite"
+		        }
+		    })
+		}
+		response: Response = post(f"{self.URL}/upload", serialized, headers=header)
+		response.raise_for_status()
+		print(serialized)
+
 	def _unpack_archive(self, archive_path, dst):
 		archive = ZipFile(archive_path)
 		archive.extractall(dst)
@@ -109,11 +137,11 @@ class Sixtyfive:
 		log.info(f"Archived files in {src_path}")
 
 		archive_path = proc_name[:-4] + ".zip"
-		self._upload(archive_path, proc_name)
+		self._upload_savefile(archive_path, proc_name)
 		os.remove(archive_path)
 		return
 
-	def _upload(self, data_path: str, proc_name: str):
+	def _upload_savefile(self, data_path: str, proc_name: str):
 		header = {
 		    **self.header_base, 
 			"Dropbox-API-Arg": json.dumps({
@@ -137,6 +165,8 @@ def main(args):
 		observer.restore(args.download)
 	elif args.upload:
 		observer.backup(args.upload)
+	elif args.add_path and args.add_process:
+		observer.add_config(args.add_process, args.add_path)
 	elif args.list:
 		txt = json.dumps(observer.full_configs, indent=True)
 		print(txt)
@@ -160,6 +190,12 @@ if __name__ == "__main__":
 						"--list",
 						help="Show stored configurations",
 						action="store_true")
+	parser.add_argument( "--add_process", 
+						required="--add_path" in argv,
+						help="A name of the process for a new configuration")
+	parser.add_argument( "--add_path", 
+						required="--add_process" in argv,
+						help="A path of the process for a new configuration")
 
 	args = parser.parse_args()
 	main(args)
