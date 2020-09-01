@@ -1,5 +1,6 @@
 #!python
 import argparse
+import enum
 import json
 import logging
 import os
@@ -13,7 +14,29 @@ from requests import Response, post
 
 
 class Sixtyfive:
+	CONFIG_NAME = "configs.json"
 	URL = "https://content.dropboxapi.com/2/files"
+
+	class PostHeaderOptions(enum.Enum):
+		'''
+		Each enum returns a function, returning a tuple of (headers, POST URL).
+		'''
+		DOWNLOAD = lambda inst, path_name: ({
+		    **inst.header_base,
+			"Dropbox-API-Arg": json.dumps({
+		        "path": f"/{path_name}",
+		    })
+		}, f"{inst.URL}/download")
+
+		UPLOAD = lambda inst, name: ({
+		    **inst.header_base, 
+			"Dropbox-API-Arg": json.dumps({
+		        "path": f"/{name}" if name == Sixtyfive.CONFIG_NAME else f"/data/{name[:-4]}.zip",
+		        "mode": {
+		            ".tag": "overwrite"
+		        }
+		    })
+		}, f"{inst.URL}/upload")
 
 
 	def __init__(self, configs_name):
@@ -35,15 +58,25 @@ class Sixtyfive:
 			return f.readline().strip()
 
 	def _download(self, name: str):
-		header = {
-		    **self.header_base,
-			"Dropbox-API-Arg": json.dumps({
-		        "path": f"/{name}",
-		    })
-		}
-		resp: Response = post(f"{self.URL}/download", headers=header)
+		resp = self._post(self.PostHeaderOptions.DOWNLOAD, name)
 		resp.raise_for_status()
 		return resp.content
+
+	def _post(self, post_option: "Sixtyfive.PostHeaderOptions", name: str, data=None) -> Response:
+		'''
+		Post a data to Dropbox. It provides upload and download.
+
+		:param post_option: PostHeaderOptions.UPLOAD or PostHeaderOptions.DOWNLOAD
+		:param name: It can be one of both: Sixtyfive.CONFIG_NAME, or proc_name
+		:param data: it is used if and only if an UPLOAD enum is used.
+		'''
+
+		headers, url = post_option(self, name)
+		if post_option == self.PostHeaderOptions.UPLOAD:
+			return post(url, data, headers=headers)
+		else:
+			return post(url, headers=headers)
+
 
 	def watch(self):
 		log.info(f"Watching {self.names}...")
@@ -83,7 +116,7 @@ class Sixtyfive:
 		return
 
 	def add_config(self, proc_name: str, save_path: str):
-		configs = json.loads(self._download("configs.json"))
+		configs = json.loads(self._download(self.CONFIG_NAME))
 
 		# If a process already exists, remove the previous one.
 		if legacy := next((it for it in configs["applications"] 
@@ -97,18 +130,10 @@ class Sixtyfive:
 
 		serialized = json.dumps(configs, indent=True)
 
-		header = {
-		    **self.header_base, 
-			"Dropbox-API-Arg": json.dumps({
-		        "path": "/configs.json",
-		        "mode": {
-		            ".tag": "overwrite"
-		        }
-		    })
-		}
-		response: Response = post(f"{self.URL}/upload", serialized, headers=header)
+		response = self._post(self.PostHeaderOptions.UPLOAD, self.CONFIG_NAME, serialized)
 		response.raise_for_status()
 		print(serialized)
+		return
 
 	def _unpack_archive(self, archive_path, dst):
 		archive = ZipFile(archive_path)
@@ -142,25 +167,14 @@ class Sixtyfive:
 		return
 
 	def _upload_savefile(self, data_path: str, proc_name: str):
-		header = {
-		    **self.header_base, 
-			"Dropbox-API-Arg": json.dumps({
-		        "path": f"/data/{proc_name[:-4]}.zip",
-		        "mode": {
-		            ".tag": "overwrite"
-		        }
-		    })
-		}
 		with open(data_path, "rb") as f:
-			response: Response = post(f"{self.URL}/upload",
-			                          f.read(),
-			                          headers=header)
+			response = self._post(self.PostHeaderOptions.UPLOAD, proc_name, f.read())
 		log.info("Uploaded successfully!" if response.ok else f"Failed due to {response.content}")
 		return
 
 
 def main(args):
-	observer = Sixtyfive("configs.json")
+	observer = Sixtyfive(Sixtyfive.CONFIG_NAME)
 	if args.download:
 		observer.restore(args.download)
 	elif args.upload:
