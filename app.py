@@ -36,7 +36,7 @@ class WindowedApp(QWidget):
 		super().__init__()
 
 		self.setWindowTitle("Sixtyfive")
-		#self.setWindowIcon(QIcon("web.png"))
+		self.setWindowIcon(QIcon("resources/icon.ico"))
 
 		self.grid = wid.QGridLayout()
 
@@ -57,6 +57,8 @@ class WindowedApp(QWidget):
 
 		self.setLayout(self.grid)
 
+		self.show()
+
 		if DEBUG:
 			self.cb.addItems(["alice.exe", "bob.exe", "charlie.exe"])
 		else:
@@ -65,8 +67,6 @@ class WindowedApp(QWidget):
 			self.cb.addItems(self.sixtyfive.names)
 
 		self.run()
-
-		self.show()
 		return
 
 	def run(self):

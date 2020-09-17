@@ -68,7 +68,7 @@ class Sixtyfive:
 		return [conf["name"] for conf in self.configs]
 
 	@staticmethod
-	def _read_token(path="token.txt") -> str:
+	def _read_token(path="resources/token.txt") -> str:
 		with open(path, "rt") as f:
 			return f.readline().strip()
 
