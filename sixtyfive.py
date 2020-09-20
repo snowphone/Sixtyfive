@@ -4,7 +4,7 @@ import enum
 import json
 import logging
 import os
-from shutil import copy, make_archive, rmtree
+from shutil import make_archive
 from sys import argv, stderr
 from typing import Callable, List, Tuple, TypedDict
 from zipfile import ZipFile
@@ -21,11 +21,14 @@ class ConfigType(TypedDict):
 class ConfigsType(TypedDict):
 	applications: List[ConfigType]
 
+
 OptionType = Callable[["Sixtyfive", str], Tuple[dict, str]]
+
 
 class Sixtyfive:
 	CONFIG_NAME = "configs.json"
 	URL = "https://content.dropboxapi.com/2/files"
+	TOKEN_PATH="resources/token.txt"
 
 	class PostHeaderOptions(enum.Enum):
 		'''
@@ -68,7 +71,7 @@ class Sixtyfive:
 		return [conf["name"] for conf in self.configs]
 
 	@staticmethod
-	def _read_token(path="resources/token.txt") -> str:
+	def _read_token(path=TOKEN_PATH) -> str:
 		with open(path, "rt") as f:
 			return f.readline().strip()
 

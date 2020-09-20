@@ -1,4 +1,6 @@
+import os
 import sys
+import webbrowser as wb
 from logging import Handler
 from threading import Thread
 
@@ -8,6 +10,7 @@ from PyQt5.QtCore import QThread
 from PyQt5.QtGui import QCloseEvent, QIcon
 from PyQt5.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QPushButton,
                              QVBoxLayout, QWidget)
+from requests import post
 
 import sixtyfive
 
@@ -59,6 +62,10 @@ class WindowedApp(QWidget):
 
 		self.show()
 
+		if not self.token_exists():
+			token = self.authorize()
+			self.store_token(token)
+
 		if DEBUG:
 			self.cb.addItems(["alice.exe", "bob.exe", "charlie.exe"])
 		else:
@@ -70,7 +77,6 @@ class WindowedApp(QWidget):
 		return
 
 	def run(self):
-
 		class Watcher(QThread):
 			def __init__(self: core.QObject, parent, inst: sixtyfive.Sixtyfive):
 				super().__init__(parent)
@@ -82,6 +88,44 @@ class WindowedApp(QWidget):
 		self.watch_thread = Watcher(self, self.sixtyfive)
 		self.watch_thread.start()
 
+	@staticmethod
+	def token_exists(path=sixtyfive.Sixtyfive.TOKEN_PATH) -> bool:
+		return os.path.exists(path)
+
+	@staticmethod
+	def store_token(token: str, path=sixtyfive.Sixtyfive.TOKEN_PATH):
+		with open(path, "wt") as f:
+			f.write(token)
+		return
+
+	def authorize(self) -> str:
+		'''
+		Get a token by accessing the web.
+		'''
+		app_key = "q9zdzeo9ybjr89q"
+		app_secret = "fh7ter6p0mnga8u"
+		auth_url = f"https://www.dropbox.com/oauth2/authorize?client_id={app_key}&response_type=code"
+
+		# Authorize
+		wb.open(auth_url)
+		auth_code, ok = wid.QInputDialog.getText(
+			self, "Sign in", "Enter code after authorization: ")
+		auth_code = auth_code.strip()
+		assert ok
+
+		# Exchange from code to token
+		token_url = "https://api.dropboxapi.com/oauth2/token"
+		params = {
+		    "code": auth_code,
+		    "grant_type": "authorization_code",
+		    "client_id": app_key,
+		    "client_secret": app_secret,
+		}
+
+		resp = post(token_url, data=params)
+		resp.raise_for_status()
+
+		return resp.json()["access_token"]
 
 	def create_status_layout(self):
 		self.status.setReadOnly(True)
