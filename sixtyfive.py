@@ -1,17 +1,16 @@
 #!/usr/bin/python3
 import argparse
 import enum
+import io
 import json
-from multiprocessing import Pool
 import logging
-import os
-from shutil import make_archive
 from sys import argv, stderr
 from typing import Callable, List, Tuple, TypedDict
-from zipfile import ZipFile
 
 from psutil import Process, process_iter, wait_procs
-from requests import Response, post
+from requests import post, Response
+
+from archiver import archive_to_memory, unpack_from_memory
 
 
 class ConfigType(TypedDict):
@@ -123,13 +122,11 @@ class Sixtyfive:
 		log.info(f"Downloading data of {proc_name}...")
 		data = self._download(f"data/{archive_name}")
 
-		with open(archive_name, "wb") as f:
-			f.write(data)
-
+		log.info(f"Downloaded! Now unpacking files...")
 		restore_path = config["save_path"]
-		self._unpack_archive(archive_name, restore_path)
+		file_in_mem = io.BytesIO(data)
+		unpack_from_memory(file_in_mem, restore_path)
 
-		os.remove(archive_name)
 		log.info(f"Restoration completed!")
 		return
 
@@ -176,18 +173,6 @@ class Sixtyfive:
 		config = next(c for c in self.configs if c['name'] == proc_name)
 		log.info(f"The path of \'{proc_name}\' is \'{config['save_path']}\'")
 
-	@staticmethod
-	def _make_archive(*args):
-		with Pool() as pool:
-			pool.starmap(make_archive, [args])
-		return
-
-	@staticmethod
-	def _unpack_archive(archive_path, dst):
-		archive = ZipFile(archive_path)
-		archive.extractall(dst)
-		archive.close()
-
 	def _register_process(self, proc: Process):
 		wait_procs([proc], callback=self._backup_savefile)
 		return
@@ -206,17 +191,14 @@ class Sixtyfive:
 			raise
 
 		log.info(f"Archiving files in {src_path}")
-		self._make_archive(proc_name[:-4], "zip", src_path)
+		data = archive_to_memory(src_path)
 		log.info(f"Archiving done! Now uploading the archive")
 
-		archive_path = proc_name[:-4] + ".zip"
-		self._upload_savefile(archive_path, proc_name)
-		os.remove(archive_path)
+		self._upload_savefile(data, proc_name)
 		return
 
-	def _upload_savefile(self, data_path: str, proc_name: str):
-		with open(data_path, "rb") as f:
-			response = self._post(self.PostHeaderOptions.UPLOAD, proc_name, f.read())
+	def _upload_savefile(self, data: bytes, proc_name: str):
+		response = self._post(self.PostHeaderOptions.UPLOAD, proc_name, data)
 		log.info("Uploaded successfully!" if response.ok else f"Failed due to {str(response.content)}")
 		return
 
