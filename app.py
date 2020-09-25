@@ -3,6 +3,7 @@ import sys
 import webbrowser as wb
 from logging import Handler
 from threading import Thread
+from multiprocessing import freeze_support
 
 import PyQt5.QtCore as core
 import PyQt5.QtWidgets as wid
@@ -246,6 +247,7 @@ class WindowedApp(QWidget):
 
 
 if __name__ == "__main__":
+	freeze_support()
 	app = QApplication(sys.argv)
 	ex = WindowedApp()
 	sys.exit(app.exec())
