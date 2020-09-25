@@ -2,6 +2,7 @@
 import argparse
 import enum
 import json
+from multiprocessing import Pool
 import logging
 import os
 from shutil import make_archive
@@ -176,6 +177,12 @@ class Sixtyfive:
 		log.info(f"The path of \'{proc_name}\' is \'{config['save_path']}\'")
 
 	@staticmethod
+	def _make_archive(*args):
+		with Pool() as pool:
+			pool.starmap(make_archive, [args])
+		return
+
+	@staticmethod
 	def _unpack_archive(archive_path, dst):
 		archive = ZipFile(archive_path)
 		archive.extractall(dst)
@@ -199,7 +206,7 @@ class Sixtyfive:
 			raise
 
 		log.info(f"Archiving files in {src_path}")
-		make_archive(proc_name[:-4], "zip", src_path)
+		self._make_archive(proc_name[:-4], "zip", src_path)
 		log.info(f"Archiving done! Now uploading the archive")
 
 		archive_path = proc_name[:-4] + ".zip"
