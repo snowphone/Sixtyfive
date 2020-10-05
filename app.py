@@ -136,6 +136,7 @@ class WindowedApp(QWidget):
 
 	def create_sync_layout(self, parent: wid.QBoxLayout):
 		parent.addWidget(self.cb)
+		self.cb.currentTextChanged.connect(self.show_on_change)
 
 		hbox = QHBoxLayout()
 
@@ -150,9 +151,13 @@ class WindowedApp(QWidget):
 		parent.addLayout(hbox)
 		return
 
+	def show_on_change(self):
+		self.line_proc_name.setText(self.cb.currentText())
+		self.line_path.setText(next(c['save_path'] for c in self.sixtyfive.configs if c['name'] == self.cb.currentText()))
+
 	def create_show_path_button(self):
 		btn = QPushButton("ShowButton", self)
-		btn.setText("Show path")
+		btn.setText("Expanded path")
 		btn.clicked.connect(self.show_path_on_click)
 
 		return btn
@@ -162,7 +167,7 @@ class WindowedApp(QWidget):
 		if DEBUG:
 			print(f"Path of {proc_name} will be printed")
 		else:
-			self.sixtyfive.show_path(proc_name)
+			self.sixtyfive.show_expanded_path(proc_name)
 
 	def create_add_layout(self, parent: wid.QBoxLayout):
 		hbox = QHBoxLayout()
@@ -209,7 +214,7 @@ class WindowedApp(QWidget):
 
 	def create_add_button(self):
 		btn = QPushButton(self)
-		btn.setText("Add")
+		btn.setText("Add / Modify")
 		btn.clicked.connect(self.add_config_on_click)
 
 		return btn
@@ -225,7 +230,9 @@ class WindowedApp(QWidget):
 			self.update_combo_box()
 
 	def update_combo_box(self):
+		self.cb.currentTextChanged.disconnect(self.show_on_change)
 		self.cb.clear()
+		self.cb.currentTextChanged.connect(self.show_on_change)
 		self.cb.addItems(self.sixtyfive.names)
 
 	def create_remove_button(self):

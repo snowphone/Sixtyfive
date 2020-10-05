@@ -4,8 +4,10 @@ import enum
 import io
 import json
 import logging
+import os
 from sys import argv, stderr
 from typing import Callable, List, Tuple, TypedDict
+import winreg
 
 from psutil import Process, process_iter, wait_procs
 from requests import post, Response
@@ -28,28 +30,28 @@ OptionType = Callable[["Sixtyfive", str], Tuple[dict, str]]
 class Sixtyfive:
 	CONFIG_NAME = "configs.json"
 	URL = "https://content.dropboxapi.com/2/files"
-	TOKEN_PATH="resources/token.txt"
+	TOKEN_PATH = "resources/token.txt"
 
 	class PostHeaderOptions(enum.Enum):
 		'''
 		Each enum returns a function, returning a tuple of (headers, POST URL).
 		'''
 		DOWNLOAD: OptionType = lambda inst, path_name: ({
-		    **inst.header_base,
-			"Dropbox-API-Arg": json.dumps({
-		        "path": f"/{path_name}",
-		    })
-		}, f"{inst.URL}/download")
+															**inst.header_base,
+															"Dropbox-API-Arg": json.dumps({
+																"path": f"/{path_name}",
+															})
+														}, f"{inst.URL}/download")
 
 		UPLOAD: OptionType = lambda inst, name: ({
-		    **inst.header_base,
-			"Dropbox-API-Arg": json.dumps({
-		        "path": f"/{name}" if name == Sixtyfive.CONFIG_NAME else f"/data/{name[:-4]}.zip",
-		        "mode": {
-		            ".tag": "overwrite"
-		        }
-		    })
-		}, f"{inst.URL}/upload")
+													 **inst.header_base,
+													 "Dropbox-API-Arg": json.dumps({
+														 "path": f"/{name}" if name == Sixtyfive.CONFIG_NAME else f"/data/{name[:-4]}.zip",
+														 "mode": {
+															 ".tag": "overwrite"
+														 }
+													 })
+												 }, f"{inst.URL}/upload")
 
 	def __init__(self, configs_name=CONFIG_NAME):
 		self.token = self._read_token()
@@ -57,6 +59,9 @@ class Sixtyfive:
 			"Authorization": f"Bearer {self.token}",
 			"Content-Type": "application/octet-stream",
 		}
+
+		# Register a steam installation path to environment variables
+		os.environ["STEAM"] = self._get_steam_path()
 
 		self.full_configs: ConfigsType = json.loads(self._download(configs_name))
 
@@ -74,6 +79,16 @@ class Sixtyfive:
 	def _read_token(path=TOKEN_PATH) -> str:
 		with open(path, "rt") as f:
 			return f.readline().strip()
+
+	@staticmethod
+	def _get_steam_path():
+		try:
+			key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Valve\Steam")
+			path = winreg.QueryValueEx(key, "SteamPath")[0]
+			return os.path.join(path, "steamapps", "common")
+		except Exception:
+			log.error("Failed to get an steam directory")
+			raise RuntimeError("Failed to get an steam directory")
 
 	def _download(self, name: str):
 		resp = self._post(self.PostHeaderOptions.DOWNLOAD, name)
@@ -123,18 +138,22 @@ class Sixtyfive:
 		data = self._download(f"data/{archive_name}")
 
 		log.info(f"Downloaded! Now unpacking files...")
-		restore_path = config["save_path"]
+		restore_path = self._get_expanded_path(config["save_path"])
 		file_in_mem = io.BytesIO(data)
 		unpack_from_memory(file_in_mem, restore_path)
 
 		log.info(f"Restoration completed!")
 		return
 
+	@staticmethod
+	def _get_expanded_path(path: str):
+		return os.path.expandvars(path)
+
 	def add_config(self, proc_name: str, save_path: str):
 
 		# If a process already exists, remove the previous one.
 		if legacy := next((it for it in self.configs
-							if it["name"] == proc_name or it["save_path"] == save_path), None):
+						   if it["name"] == proc_name or it["save_path"] == save_path), None):
 			log.info(f"The save path \'{legacy['save_path']}\' already exists. Replace the path with \'{save_path}\'.")
 			self.configs.remove(legacy)
 
@@ -169,9 +188,9 @@ class Sixtyfive:
 		log.info(f"{proc_name} is successfully removed")
 		return
 
-	def show_path(self, proc_name: str):
+	def show_expanded_path(self, proc_name: str):
 		config = next(c for c in self.configs if c['name'] == proc_name)
-		log.info(f"The path of \'{proc_name}\' is \'{config['save_path']}\'")
+		log.info(f"{proc_name}: {self._get_expanded_path(config['save_path'])}")
 
 	def _register_process(self, proc: Process):
 		wait_procs([proc], callback=self._backup_savefile)
@@ -186,6 +205,7 @@ class Sixtyfive:
 	def backup(self, proc_name: str):
 		try:
 			src_path: str = next(config["save_path"] for config in self.configs if config["name"] == proc_name)
+			src_path = self._get_expanded_path(src_path)
 		except StopIteration as e:
 			log.error(f"{proc_name} does not exist in the configuration")
 			raise
