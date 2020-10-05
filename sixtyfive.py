@@ -5,12 +5,12 @@ import io
 import json
 import logging
 import os
+import winreg
 from sys import argv, stderr
 from typing import Callable, List, Tuple, TypedDict
-import winreg
 
 from psutil import Process, process_iter, wait_procs
-from requests import post, Response
+from requests import Response, post
 
 from archiver import archive_to_memory, unpack_from_memory
 
@@ -162,6 +162,7 @@ class Sixtyfive:
 			"save_path": save_path
 		}
 		self.configs.append(new_config)
+		self.configs.sort(key=lambda x: x['name'].lower())
 
 		serialized = json.dumps(self.full_configs, indent=True)
 
