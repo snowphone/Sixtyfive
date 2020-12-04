@@ -7,7 +7,7 @@ plugins {
 	application
 }
 group = "kr.ac.kaist.ecl.mjo"
-version = "1.0-SNAPSHOT"
+version = "1.0"
 
 repositories {
 	jcenter()
@@ -26,7 +26,7 @@ dependencies {
 
 	testImplementation(kotlin("test-junit"))
 }
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
 	kotlinOptions.jvmTarget = "1.8"
 }
 
@@ -45,6 +45,9 @@ jlink {
 	options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
 	launcher {
 		jvmArgs = runtimeArgs
+	}
+	jpackage {
+		icon = "build/resources/main/icon.ico"
 	}
 }
 

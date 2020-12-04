@@ -4,13 +4,15 @@ import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
 import com.google.gson.Gson
+import kr.ac.kaist.ecl.mjo.Zip.pack
+import kr.ac.kaist.ecl.mjo.Zip.unpack
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.file.Paths
 
-class Sixtyfive(private val configName: String = "configs.json") {
+class Sixtyfive(configName: String = "configs.json") {
 	private val watchDog = ProcessWatchDog()
 	private val uploadConfigName = "/$configName"
 	private val envs = System.getenv().toMutableMap()
