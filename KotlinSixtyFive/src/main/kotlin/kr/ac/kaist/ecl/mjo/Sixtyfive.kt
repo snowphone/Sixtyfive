@@ -3,7 +3,9 @@ package kr.ac.kaist.ecl.mjo
 import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
-import com.google.gson.Gson
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kr.ac.kaist.ecl.mjo.Zip.pack
 import kr.ac.kaist.ecl.mjo.Zip.unpack
 import java.io.BufferedReader
@@ -13,7 +15,6 @@ import java.io.InputStreamReader
 import java.nio.file.Paths
 
 class Sixtyfive(configName: String = "configs.json") {
-	private val watchDog = ProcessWatchDog()
 	private val uploadConfigName = "/$configName"
 	private val envs = System.getenv().toMutableMap()
 	private val accessToken =
@@ -29,27 +30,27 @@ class Sixtyfive(configName: String = "configs.json") {
 		.start()
 		.inputStream
 		.let(::InputStreamReader)
-		.let { Gson().fromJson(it, Config::class.java) }
+		.let(InputStreamReader::readText)
+		.let { Json.decodeFromString(it) }
 	private val watchList: List<String> = config
 		.applications
 		.map(AppConfig::name)
-	private val steamDirectory: String
-		get() = Runtime
-			.getRuntime()
-			.exec("""reg query HKEY_CURRENT_USER\SOFTWARE\Valve\Steam /v SteamPath""")
-			.let(Process::getInputStream)
-			.let(InputStream::bufferedReader)
-			.let(BufferedReader::readText)
-			.let { Regex("(?<=REG_SZ).*").find(it)!!.value.trim() }
-			.let { Paths.get(it, "steamapps", "common").toString() }
+	private val steamDirectory = Runtime
+		.getRuntime()
+		.exec("""reg query HKEY_CURRENT_USER\SOFTWARE\Valve\Steam /v SteamPath""")
+		.let(Process::getInputStream)
+		.let(InputStream::bufferedReader)
+		.let(BufferedReader::readText)
+		.let { Regex("(?<=REG_SZ).*").find(it)!!.value.trim() }
+		.let { Paths.get(it, "steamapps", "common").toString() }
+	private val watchDog = ProcessWatchDog()
 
 	init {
 		println("Signed-in user: ${dropbox.users().currentAccount.name.displayName}")
 
 		envs["STEAM"] = steamDirectory
-		watchList.stream()
-			.peek { watchDog.register(it) { _ -> backup(it) } }
-			.peek(this::sync)
+		watchList.forEach { watchDog.register(it) { _ -> backup(it) } }
+		//watchList.forEach(this::sync)
 	}
 
 	val String.toZipName: String
@@ -107,7 +108,7 @@ class Sixtyfive(configName: String = "configs.json") {
 			.files()
 			.uploadBuilder(uploadConfigName)
 			.withMode(WriteMode.OVERWRITE)
-			.uploadAndFinish(Gson().toJson(config).byteInputStream())
+			.uploadAndFinish(Json.encodeToString(config).byteInputStream())
 	}
 
 	fun removeConfig(processName: String) {

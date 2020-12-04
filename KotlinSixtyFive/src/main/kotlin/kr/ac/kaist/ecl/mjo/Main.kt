@@ -4,7 +4,6 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.associate
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import com.google.gson.GsonBuilder
 import kotlin.system.exitProcess
 
 class Main: CliktCommand(name = "Sixtyfive") {
@@ -32,10 +31,15 @@ class Main: CliktCommand(name = "Sixtyfive") {
 			needWatching = false
 		}
 		if (list) {
+			val len = sixtyfive
+				.config
+				.applications
+				.map(AppConfig::name)
+				.maxOf(String::length)
 			sixtyfive
 				.config
-				.let(GsonBuilder().setPrettyPrinting().create()::toJson)
-				.let(::println)
+				.applications
+				.forEach { println("${it.name.padEnd(len)}: ${it.savePath}") }
 			exitProcess(0)
 		}
 		if (path.neitherNullNorEmpty) {

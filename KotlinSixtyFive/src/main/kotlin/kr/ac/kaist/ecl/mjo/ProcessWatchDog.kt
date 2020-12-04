@@ -24,14 +24,15 @@ class ProcessWatchDog {
 
 	fun start() {
 		val notYetRegistered = watchList.toMutableSet()
+		println("Watching $notYetRegistered")
 		while (true) {
 			ProcessHandle
-					.allProcesses()
-					.filter(ProcessHandle::isAlive)
-					.filter { it.name in notYetRegistered }
-					.peek {println("${it.name} has started")}
-					.peek { it.onExit().thenAcceptAsync(callbackList[it.name]) }
-					.forEach { notYetRegistered.remove(it.name) }
+				.allProcesses()
+				.filter(ProcessHandle::isAlive)
+				.filter { it.name in notYetRegistered }
+				.peek { println("${it.name} has started") }
+				.peek { it.onExit().thenAcceptAsync(callbackList[it.name]) }
+				.forEach { notYetRegistered.remove(it.name) }
 		}
 	}
 }
