@@ -31,15 +31,7 @@ class Main: CliktCommand(name = "Sixtyfive") {
 			needWatching = false
 		}
 		if (list) {
-			val len = sixtyfive
-				.config
-				.applications
-				.map(AppConfig::name)
-				.maxOf(String::length)
-			sixtyfive
-				.config
-				.applications
-				.forEach { println("${it.name.padEnd(len)}: ${it.savePath}") }
+			println(sixtyfive.config)
 			exitProcess(0)
 		}
 		if (path.neitherNullNorEmpty) {
