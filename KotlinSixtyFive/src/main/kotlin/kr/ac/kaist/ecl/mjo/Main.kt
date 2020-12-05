@@ -47,20 +47,24 @@ class Main : CliktCommand(name = "Sixtyfive") {
 				.first()
 				.let { sixtyfive.addConfig(it.key, it.value) }
 
-			remove.neitherNullNorEmpty -> remove?.let { sixtyfive.removeConfig(it) }
+			remove.neitherNullNorEmpty -> remove
+				?.let(sixtyfive::removeConfig)
+
 			list -> sixtyfive
 				.config
 				.toString()
 				.split('\n')
 				.forEach(logger::info)
+
 			path.neitherNullNorEmpty ->
 				sixtyfive
-					.config.applications.filter { it.name == path }
-					.firstOrNull()
+					.config.applications.firstOrNull { it.name == path }
 					?.savePath
 					?.expand
 					?.let { logger.info("$path: $it") }
+
 			upload.neitherNullNorEmpty -> upload?.let(sixtyfive::backup)
+
 			download.neitherNullNorEmpty -> download?.let(sixtyfive::restore)
 
 			else -> sixtyfive.also(Sixtyfive::watchProcesses)

@@ -1,27 +1,28 @@
 package kr.ac.kaist.ecl.mjo
 
+import com.dropbox.core.DbxAppInfo
 import com.dropbox.core.DbxRequestConfig
+import com.dropbox.core.DbxWebAuth
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayOutputStream
-import java.io.InputStreamReader
+import java.awt.Desktop
+import java.io.*
+import java.net.URI
+
+@Serializable
+data class Key(val key: String, val secret: String)
 
 class Sixtyfive(configName: String = "configs.json") {
+	private val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
 	private val uploadConfigName = "/$configName"
-	private val accessToken =
-		"Jgl5ZIYICzsAAAAAAAAAAdzXB7cP5CdmfMlPZ0dBnmMa0L2mNKWPvVqMLkzBPCaq" //TODO("Get access token from the web")
-	private val dropbox: DbxClientV2 = this::class.java
-		.getResource("/key.json")
-		.path
-		.let(DbxRequestConfig::newBuilder)
-		.build()
-		.let { DbxClientV2(it, accessToken) }
+	private val dropbox: DbxClientV2 = accessDropbox()
 	val config: Config = dropbox.files()
 		.downloadBuilder(uploadConfigName)
 		.start()
@@ -33,6 +34,38 @@ class Sixtyfive(configName: String = "configs.json") {
 		.applications
 		.map(AppConfig::name)
 	private val watchDog = ProcessWatchDog()
+
+
+	private fun accessDropbox(): DbxClientV2 {
+		val config = DbxRequestConfig.newBuilder(this::class.java.name).build()
+		val info = this::class.java
+			.getResourceAsStream("/key.json")
+			.let(DbxAppInfo.Reader::readFully)
+
+		val token = runCatching { tokenPath.let(::FileReader) }
+			.mapCatching(FileReader::readText)
+			.mapCatching(String::trim)
+			.getOrElse { authenticate(config, info) }
+
+		return DbxClientV2(config, token)
+	}
+
+	private fun authenticate(config: DbxRequestConfig, info: DbxAppInfo): String? {
+		val auth = DbxWebAuth(config, info)
+		val url = DbxWebAuth.newRequestBuilder().withNoRedirect().build().let(auth::authorize)
+
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+			Desktop.getDesktop().browse(url.let(::URI))
+			logger.info("Log in from your browser and copy TOKEN to console")
+		} else {
+			logger.info("Go to '$url' and enter the access code")
+		}
+		val accessCode = readLine()?.trim()
+
+		return auth.finishFromCode(accessCode).accessToken
+			?.apply { tokenPath.let(::File).parentFile.mkdirs() }
+			?.also { tok -> tokenPath.let(::FileWriter).use { w -> w.write(tok) } }!!
+	}
 
 	init {
 		logger.info("Signed-in user: ${dropbox.users().currentAccount.name.displayName}")
