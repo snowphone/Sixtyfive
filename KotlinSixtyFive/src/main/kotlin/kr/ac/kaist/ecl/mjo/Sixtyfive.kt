@@ -9,10 +9,13 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kr.ac.kaist.ecl.mjo.Zip.pack
 import kr.ac.kaist.ecl.mjo.Zip.unpack
+import org.slf4j.LoggerFactory
 import java.io.*
 import java.nio.file.Paths
 
 class Sixtyfive(configName: String = "configs.json") {
+	private val logger = LoggerFactory.getLogger(this::class.java)
+
 	private val uploadConfigName = "/$configName"
 	private val envs = System.getenv().toMutableMap()
 	private val accessToken =
@@ -44,19 +47,23 @@ class Sixtyfive(configName: String = "configs.json") {
 	private val watchDog = ProcessWatchDog()
 
 	init {
-		println("Signed-in user: ${dropbox.users().currentAccount.name.displayName}")
+		logger.info("Signed-in user: ${dropbox.users().currentAccount.name.displayName}")
 
 		envs["STEAM"] = steamDirectory
 		watchList.forEach { watchDog.register(it) { _ -> backup(it) } }
-		watchList.parallelStream().forEach(this::sync)
 	}
 
-	val String.toZipName: String
+	inline val String.toZipName: String
 		get() = this.replace(Regex("exe$"), "zip")
-	val String.toUploadZipName: String
+	inline val String.toUploadZipName: String
 		get() = "/data/${this.toZipName}"
 
+	fun syncProcesses() = watchList.parallelStream().forEach(this::sync)
 	fun watchProcesses() = watchDog.start()
+
+	fun Long?.lessThan(other: Long?): Int? {
+		return other?.let { this?.compareTo(it) }
+	}
 
 	private fun sync(processName: String) {
 		val (stream, remoteTime) = downloadZip(processName)
@@ -69,11 +76,11 @@ class Sixtyfive(configName: String = "configs.json") {
 			?.let(::File)
 			?.lastModified()
 
-		when (remoteTime?.let { localTime?.compareTo(it) }) {
+		when (localTime.lessThan(remoteTime)) {
 			in Int.MIN_VALUE until 0 -> stream?.let { unpackToDestination(processName, it) }
 			in 1 until Int.MAX_VALUE -> backup(processName)
-			0 -> println("$processName: is identical")
-			//null -> println("$processName got a problem")
+			0 -> logger.info("$processName: is identical")
+			null -> logger.warn("$processName got a problem from somewhere")
 		}
 	}
 
@@ -87,7 +94,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		.runCatching { this to dropbox.files().downloadBuilder(processName.toUploadZipName).download(this) }
 		.map { it.first.toByteArray().inputStream() to it.second }
 		.getOrElse {
-			println("Failed to download $processName from dropbox")
+			logger.warn("Failed to download $processName from dropbox")
 			null to null
 		}
 
@@ -97,11 +104,11 @@ class Sixtyfive(configName: String = "configs.json") {
 		?.savePath
 		?.let(this::expandPath)
 		?.also { unpack(stream, it) }
-		?.run { println("$processName is successfully restored") }
-		?: println("$processName does not exists")
+		?.run { logger.info("$processName is successfully restored") }
+		?: logger.warn("$processName does not exists")
 
 	fun backup(processName: String) {
-		println("$processName has terminated")
+		logger.info("$processName has terminated")
 
 		val savePath = config
 			.applications
@@ -115,15 +122,15 @@ class Sixtyfive(configName: String = "configs.json") {
 			.uploadBuilder(processName.toUploadZipName)
 			.withMode(WriteMode.OVERWRITE)
 			.uploadAndFinish(uploadData)
-		println("$processName is backed up")
+		logger.info("$processName is backed up")
 	}
 
 	fun addConfig(processName: String, path: String) {
-		println("Process: $processName  path: $path")
+		logger.info("Process: $processName  path: $path")
 		config.applications.add(AppConfig(processName, path))
 		config.applications.sort()
 		uploadConfig()
-		println("Configuration is updated")
+		logger.info("Configuration is updated")
 	}
 
 	private fun uploadConfig() {
@@ -139,8 +146,8 @@ class Sixtyfive(configName: String = "configs.json") {
 			.firstOrNull { it.name == processName }
 			?.also { config.applications.remove(it) }
 			?.also { uploadConfig() }
-			?.also { println("$it is successfully popped") }
-			?: println("$processName does not exist")
+			?.also { logger.info("$it is successfully popped") }
+			?: logger.warn("$processName does not exist")
 	}
 
 	fun expandPath(path: String): String {

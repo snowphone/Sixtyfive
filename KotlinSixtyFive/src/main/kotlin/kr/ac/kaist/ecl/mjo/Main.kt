@@ -4,13 +4,31 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.associate
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
 
 class Main: CliktCommand(name = "Sixtyfive") {
+	private val logger = LoggerFactory.getLogger(this::class.java)
+
 	private val list by option("-l", "--list", help = "Print configuration and exit").flag(default = false)
-	private val path by option("-p", "--path", metavar = "processName", help = "Print given process' expanded path and exit")
-	private val upload by option("-u", "--upload", metavar = "processName", help = "Upload a given process' data into cloud")
-	private val download by option("-d", "--download", metavar = "processName", help = "Download a given process' data from cloud")
+	private val path by option(
+		"-p",
+		"--path",
+		metavar = "processName",
+		help = "Print given process' expanded path and exit"
+	)
+	private val upload by option(
+		"-u",
+		"--upload",
+		metavar = "processName",
+		help = "Upload a given process' data into cloud"
+	)
+	private val download by option(
+		"-d",
+		"--download",
+		metavar = "processName",
+		help = "Download a given process' data from cloud"
+	)
 	private val add by option("-a", "--add", metavar = "processName=Path").associate()
 	private val remove by option(metavar = "processName")
 
@@ -31,16 +49,20 @@ class Main: CliktCommand(name = "Sixtyfive") {
 			needWatching = false
 		}
 		if (list) {
-			println(sixtyfive.config)
+			sixtyfive
+				.config
+				.toString()
+				.split('\n')
+				.forEach(logger::info)
 			exitProcess(0)
 		}
 		if (path.neitherNullNorEmpty) {
 			sixtyfive
-				.config.applications.filter { it.name == path}
+				.config.applications.filter { it.name == path }
 				.firstOrNull()
 				?.savePath
 				?.let(sixtyfive::expandPath)
-				?.let { println("$path: $it") }
+				?.let { logger.info("$path: $it") }
 			needWatching = false
 		}
 		if(upload.neitherNullNorEmpty) {
@@ -53,7 +75,9 @@ class Main: CliktCommand(name = "Sixtyfive") {
 		}
 
 		if (needWatching) {
-			sixtyfive.watchProcesses()
+			sixtyfive
+				.also(Sixtyfive::syncProcesses)
+				.also(Sixtyfive::watchProcesses)
 		}
 	}
 }

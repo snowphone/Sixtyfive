@@ -1,10 +1,12 @@
 package kr.ac.kaist.ecl.mjo
 
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.function.Consumer
 
 
 class ProcessWatchDog {
+	private val logger = LoggerFactory.getLogger(this::class.java)
 
 	private var watchList: MutableSet<String> = mutableSetOf()
 	private var callbackList: MutableMap<String, Consumer<ProcessHandle>> = mutableMapOf()
@@ -24,13 +26,13 @@ class ProcessWatchDog {
 
 	fun start() {
 		val notYetRegistered = watchList.toMutableSet()
-		println("Watching $notYetRegistered")
+		logger.info("Watching $notYetRegistered")
 		while (true) {
 			ProcessHandle
 				.allProcesses()
 				.filter(ProcessHandle::isAlive)
 				.filter { it.name in notYetRegistered }
-				.peek { println("${it.name} has started") }
+				.peek { logger.info("${it.name} has started") }
 				.peek { it.onExit().thenAcceptAsync(callbackList[it.name]) }
 				.forEach { notYetRegistered.remove(it.name) }
 		}
