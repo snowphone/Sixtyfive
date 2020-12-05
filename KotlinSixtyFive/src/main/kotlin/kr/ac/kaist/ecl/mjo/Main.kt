@@ -5,81 +5,68 @@ import com.github.ajalt.clikt.parameters.options.associate
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import org.slf4j.LoggerFactory
-import kotlin.system.exitProcess
 
-class Main: CliktCommand(name = "Sixtyfive") {
+class Main : CliktCommand(name = "Sixtyfive") {
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
 	private val list by option("-l", "--list", help = "Print configuration and exit").flag(default = false)
 	private val path by option(
 		"-p",
 		"--path",
-		metavar = "processName",
+		metavar = "PROC",
 		help = "Print given process' expanded path and exit"
 	)
 	private val upload by option(
 		"-u",
 		"--upload",
-		metavar = "processName",
+		metavar = "PROC",
 		help = "Upload a given process' data into cloud"
 	)
 	private val download by option(
 		"-d",
 		"--download",
-		metavar = "processName",
+		metavar = "PROC",
 		help = "Download a given process' data from cloud"
 	)
-	private val add by option("-a", "--add", metavar = "processName=Path").associate()
-	private val remove by option(metavar = "processName")
+	private val add by option(
+		"-a", 
+		"--add", 
+		metavar = "PROC=PATH",
+		help = "Append the item pair into configuration"
+	).associate()
+	private val remove by option(metavar = "PROC", help = "Remove the item from configuration")
 
 	private val String?.neitherNullNorEmpty: Boolean
 		get() = this?.isNotEmpty() ?: false
 
 	override fun run() {
 		val sixtyfive = Sixtyfive()
-		var needWatching = true
-		if(add.isNotEmpty()) {
-			add.entries
+		when {
+			add.isNotEmpty() -> add
+				.entries
 				.first()
 				.let { sixtyfive.addConfig(it.key, it.value) }
-			needWatching = false
-		}
-		if(remove.neitherNullNorEmpty) {
-			remove?.let { sixtyfive.removeConfig(it) }
-			needWatching = false
-		}
-		if (list) {
-			sixtyfive
+
+			remove.neitherNullNorEmpty -> remove?.let { sixtyfive.removeConfig(it) }
+			list -> sixtyfive
 				.config
 				.toString()
 				.split('\n')
 				.forEach(logger::info)
-			exitProcess(0)
-		}
-		if (path.neitherNullNorEmpty) {
-			sixtyfive
-				.config.applications.filter { it.name == path }
-				.firstOrNull()
-				?.savePath
-				?.let(sixtyfive::expandPath)
-				?.let { logger.info("$path: $it") }
-			needWatching = false
-		}
-		if(upload.neitherNullNorEmpty) {
-			upload?.let(sixtyfive::backup)
-			needWatching = false
-		}
-		if(download.neitherNullNorEmpty) {
-			download?.let(sixtyfive::restore)
-			needWatching = false
-		}
+			path.neitherNullNorEmpty ->
+				sixtyfive
+					.config.applications.filter { it.name == path }
+					.firstOrNull()
+					?.savePath
+					?.expand
+					?.let { logger.info("$path: $it") }
+			upload.neitherNullNorEmpty -> upload?.let(sixtyfive::backup)
+			download.neitherNullNorEmpty -> download?.let(sixtyfive::restore)
 
-		if (needWatching) {
-			sixtyfive
-				.also(Sixtyfive::syncProcesses)
-				.also(Sixtyfive::watchProcesses)
+			else -> sixtyfive.also(Sixtyfive::watchProcesses)
 		}
 	}
 }
+
 //TODO("Apply GUI form")
 fun main(args: Array<String>) = Main().main(args)

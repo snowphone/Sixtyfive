@@ -8,10 +8,10 @@ import java.util.function.Consumer
 class ProcessWatchDog {
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
-	private var watchList: MutableSet<String> = mutableSetOf()
-	private var callbackList: MutableMap<String, Consumer<ProcessHandle>> = mutableMapOf()
+	private val watchList: MutableSet<String> = mutableSetOf()
+	private val callbackList: MutableMap<String, Consumer<ProcessHandle>> = mutableMapOf()
 
-	val ProcessHandle.name: String
+	private val ProcessHandle.name: String
 		get() = this.info()
 			.command()
 			.orElse("")
@@ -19,7 +19,6 @@ class ProcessWatchDog {
 			.let(File::getName)
 
 	fun register(processName: String, onExitCallBack: Consumer<ProcessHandle>) {
-
 		watchList.add(processName)
 		callbackList[processName] = onExitCallBack
 	}
