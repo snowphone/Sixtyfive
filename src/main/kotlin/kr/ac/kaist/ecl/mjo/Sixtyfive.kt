@@ -5,7 +5,6 @@ import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.DbxWebAuth
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.WriteMode
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -13,9 +12,7 @@ import org.slf4j.LoggerFactory
 import java.awt.Desktop
 import java.io.*
 import java.net.URI
-
-@Serializable
-data class Key(val key: String, val secret: String)
+import java.nio.file.Path
 
 class Sixtyfive(configName: String = "configs.json") {
 	private val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
@@ -76,6 +73,8 @@ class Sixtyfive(configName: String = "configs.json") {
 				backup(it)
 			}
 		}
+
+		watchList.parallelStream().forEach(this::sync)
 	}
 
 	private inline val String.toZipName: String
@@ -83,27 +82,65 @@ class Sixtyfive(configName: String = "configs.json") {
 	private inline val String.toUploadZipName: String
 		get() = "/data/${this.toZipName}"
 
+	private fun sync(processName: String) {
+		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
+		val (remoteData, uploadedTime) = when (val pair = downloadAppData(processName)) {
+			null -> {
+				logger.warn("Failed to download $processName from dropbox")
+				return
+			}
+			else -> pair
+		}
+		if (localModifiedTime != null) {
+			when (localModifiedTime.compareTo(uploadedTime)) {
+				in 1 until Int.MAX_VALUE -> restore(processName)
+				in -1 downTo Int.MIN_VALUE -> backup(processName)
+				0 -> logger.info("$processName has not changed")
+			}
+		} else {
+			val localPath = config[processName]?.savePath?.toZipName
+			if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
+				val backupPath = "${localPath}.bak.zip"
+				logger.info("Local data exist. Save backup at $backupPath.")
+				val writer = FileWriter(backupPath)
+				writer.write(pack(localPath).readAllBytes().toString())
+				writer.close()
+			} else {
+				logger.info("${processName.toZipName} does not exist in local. Download from remote")
+				restore(processName, remoteData, uploadedTime)
+			}
+		}
+	}
+
 	fun watchProcesses() = watchDog.start()
 
+	private fun downloadAppData(processName: String): Pair<ByteArrayInputStream, Long>? = ByteArrayOutputStream()
+		.runCatching {
+			val metadata = dropbox.files().downloadBuilder(processName.toUploadZipName).download(this)
+			this to metadata
+		}.mapCatching { it.first.toByteArray().inputStream() to it.second }
+		.mapCatching { it.first to it.second.serverModified.time }
+		.getOrNull()
 
 	fun restore(processName: String) {
-		val (remoteData, uploadedTime) = ByteArrayOutputStream()
-			.runCatching {
-				val metadata = dropbox.files().downloadBuilder(processName.toUploadZipName).download(this)
-				this to metadata
-			}.mapCatching { it.first.toByteArray().inputStream() to it.second }
-			.mapCatching { it.first to it.second.serverModified.time }
-			.also { logger.debug("Downloaded ${processName.toZipName} from dropbox") }
-			.getOrElse {
+		when (val pair = downloadAppData(processName)) {
+			null -> {
 				logger.warn("Failed to download $processName from dropbox")
-				null to null
+				return
 			}
+			else -> {
+				logger.debug("Downloaded ${processName.toZipName} from dropbox")
+				restore(processName, pair.first, pair.second)
+			}
+		}
+	}
 
+	private fun restore(processName: String, remoteData: InputStream, uploadedTime: Long) {
 		config[processName]
 			?.savePath
 			?.expand
-			?.also { remoteData?.let { data -> unpack(data, it) } }
-			?.also { config[processName]!!.lastModified[hostName] = uploadedTime!! }
+			?.also { remoteData.let { data -> unpack(data, it) } }
+			?.also { config[processName]!!.lastModified[hostName] = uploadedTime }
 			?.also { updateConfig() }
 			?.run { logger.info("$processName is successfully restored") }
 			?: logger.warn("$processName does not exists")
