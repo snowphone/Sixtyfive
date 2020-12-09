@@ -87,52 +87,53 @@ class Sixtyfive(configName: String = "configs.json") {
 
 
 	fun restore(processName: String) {
-		val remoteData = ByteArrayOutputStream()
+		val (remoteData, uploadedTime) = ByteArrayOutputStream()
 			.runCatching {
-				dropbox.files().downloadBuilder(processName.toUploadZipName).download(this)
-				this
-			}.mapCatching(ByteArrayOutputStream::toByteArray)
-			.mapCatching(ByteArray::inputStream)
+				val metadata = dropbox.files().downloadBuilder(processName.toUploadZipName).download(this)
+				this to metadata
+			}.mapCatching { it.first.toByteArray().inputStream() to it.second }
+			.mapCatching { it.first to it.second.serverModified.time }
 			.also { logger.debug("Downloaded ${processName.toZipName} from dropbox") }
 			.getOrElse {
 				logger.warn("Failed to download $processName from dropbox")
-				null
+				null to null
 			}
 
-		config
-			.applications
-			.firstOrNull { it.name == processName }
+		config[processName]
 			?.savePath
 			?.expand
 			?.also { remoteData?.let { data -> unpack(data, it) } }
+			?.also { config[processName]!!.lastModified[hostName] = uploadedTime!! }
+			?.also { updateConfig() }
 			?.run { logger.info("$processName is successfully restored") }
 			?: logger.warn("$processName does not exists")
 	}
 
 	fun backup(processName: String) {
-		val localData = config
-			.applications
-			.firstOrNull { it.name == processName }
+		val localData = config[processName]
 			?.savePath
 			?.expand
 			?.let(::pack)
 
-		dropbox.files()
+		val metadata = dropbox.files()
 			.uploadBuilder(processName.toUploadZipName)
 			.withMode(WriteMode.OVERWRITE)
 			.uploadAndFinish(localData)
+
+		config[processName] = metadata.serverModified.time
+		updateConfig()
+
 		logger.info("$processName is backed up")
 	}
 
 	fun addConfig(processName: String, path: String) {
 		logger.info("Process: $processName  path: $path")
-		config.applications.add(AppConfig(processName, path))
-		config.applications.sort()
-		uploadConfig()
+		config[processName] = AppConfig(processName, path, mutableMapOf())
+		updateConfig()
 		logger.info("Configuration is updated")
 	}
 
-	private fun uploadConfig() {
+	private fun updateConfig() {
 		dropbox
 			.files()
 			.uploadBuilder(uploadConfigName)
@@ -141,10 +142,9 @@ class Sixtyfive(configName: String = "configs.json") {
 	}
 
 	fun removeConfig(processName: String) {
-		config.applications
-			.firstOrNull { it.name == processName }
+		config[processName]
 			?.also { config.applications.remove(it) }
-			?.also { uploadConfig() }
+			?.also { updateConfig() }
 			?.also { logger.info("$it is successfully popped") }
 			?: logger.warn("$processName does not exist")
 	}

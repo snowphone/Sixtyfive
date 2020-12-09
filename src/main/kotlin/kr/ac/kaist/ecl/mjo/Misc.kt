@@ -5,6 +5,7 @@ import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import java.net.InetAddress
 import java.nio.file.Paths
 
 /**
@@ -38,3 +39,6 @@ fun pack(rootDir: String): InputStream = ByteArrayOutputStream()
 fun unpack(inputStream: InputStream, dst: String) {
 	ZipUtil.unpack(inputStream, File(dst))
 }
+
+val hostName: String
+	get() = InetAddress.getLocalHost().hostName!!
