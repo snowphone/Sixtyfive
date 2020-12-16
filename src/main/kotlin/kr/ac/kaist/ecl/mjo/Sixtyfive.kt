@@ -26,7 +26,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		.inputStream
 		.let(::InputStreamReader)
 		.let(InputStreamReader::readText)
-		.let { Json.decodeFromString(it) }
+		.let(Json.Default::decodeFromString)
 	private val watchList: List<String> = config
 		.applications
 		.map(AppConfig::name)
@@ -77,10 +77,8 @@ class Sixtyfive(configName: String = "configs.json") {
 		watchList.parallelStream().forEach(this::sync)
 	}
 
-	private inline val String.toZipName: String
-		get() = this.replace(Regex("exe$"), "zip")
-	private inline val String.toUploadZipName: String
-		get() = "/data/${this.toZipName}"
+	private inline val String.toZipName: String get() = this.replace(Regex("exe$"), "zip")
+	private inline val String.toUploadZipName: String get() = "/data/${this.toZipName}"
 
 	private fun sync(processName: String) {
 		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
