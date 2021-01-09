@@ -137,7 +137,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		config[processName]
 			?.savePath
 			?.expand
-			?.also { remoteData.let { data -> unpack(data, it) } }
+			?.also { unpack(remoteData, it) }
 			?.also { config[processName]!!.lastModified[hostName] = uploadedTime }
 			?.also { updateConfig() }
 			?.run { logger.info("$processName is successfully restored") }
