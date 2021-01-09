@@ -2,6 +2,7 @@ package kr.ac.kaist.ecl.mjo
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.associate
+import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import org.slf4j.LoggerFactory
@@ -15,29 +16,27 @@ class Main : CliktCommand(name = "Sixtyfive") {
 		"--path",
 		metavar = "PROC",
 		help = "Print given process' expanded path and exit"
-	)
+	).default("")
 	private val upload by option(
 		"-u",
 		"--upload",
 		metavar = "PROC",
 		help = "Upload a given process' data into cloud"
-	)
+	).default("")
 	private val download by option(
 		"-d",
 		"--download",
 		metavar = "PROC",
 		help = "Download a given process' data from cloud"
-	)
+	).default("")
 	private val add by option(
-		"-a", 
-		"--add", 
+		"-a",
+		"--add",
 		metavar = "PROC=PATH",
 		help = "Append the item pair into configuration"
 	).associate()
-	private val remove by option(metavar = "PROC", help = "Remove the item from configuration")
+	private val remove by option(metavar = "PROC", help = "Remove the item from configuration").default("")
 
-	private val String?.neitherNullNorEmpty: Boolean
-		get() = this?.isNotEmpty() ?: false
 
 	override fun run() {
 		val sixtyfive = Sixtyfive()
@@ -46,9 +45,11 @@ class Main : CliktCommand(name = "Sixtyfive") {
 				.entries
 				.first()
 				.let { sixtyfive.addConfig(it.key, it.value) }
+				.join()
 
-			remove.neitherNullNorEmpty -> remove
-				?.let(sixtyfive::removeConfig)
+			remove.isNotEmpty() -> remove
+				.let(sixtyfive::removeConfig)
+				.join()
 
 			list -> sixtyfive
 				.config
@@ -56,16 +57,15 @@ class Main : CliktCommand(name = "Sixtyfive") {
 				.split('\n')
 				.forEach(logger::info)
 
-			path.neitherNullNorEmpty ->
-				sixtyfive
-					.config.applications.firstOrNull { it.name == path }
-					?.savePath
-					?.expand
-					?.let { logger.info("$path: $it") }
+			path.isNotEmpty() -> sixtyfive
+				.config.applications.firstOrNull { it.name == path }
+				?.savePath
+				?.expand
+				?.let { logger.info("$path: $it") }
 
-			upload.neitherNullNorEmpty -> upload?.let(sixtyfive::backup)
+			upload.isNotEmpty() -> upload.let(sixtyfive::backup).join()
 
-			download.neitherNullNorEmpty -> download?.let(sixtyfive::restore)
+			download.isNotEmpty() -> download.let(sixtyfive::restore).join()
 
 			else -> sixtyfive.also(Sixtyfive::watchProcesses)
 		}

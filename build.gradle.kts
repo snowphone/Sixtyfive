@@ -22,7 +22,9 @@ dependencies {
 	implementation("com.dropbox.core:dropbox-core-sdk:3.1.5")
 
 	implementation("org.zeroturnaround:zt-zip:1.14")
-	implementation("org.slf4j:slf4j-simple:2.0.0-alpha1")
+
+	implementation("ch.qos.logback:logback-classic:1.2.3")
+	implementation("org.slf4j:slf4j-api:1.7.30")
 
 	implementation("com.github.ajalt.clikt:clikt:3.0.1")
 
@@ -50,8 +52,12 @@ runtime {
 			//"--resource-dir", "build/resources/main",
 			"--icon", "src/main/resources/icon.ico"
 		)
-		//resourceDir = "build/resources/main".let(::File)
-		//println("resource dir: $resourceDir")
 	}
 }
 
+tasks.withType<JavaCompile> {
+	doFirst {
+		options.compilerArgs = listOf("--module-path", classpath.asPath)
+		classpath = files()
+	}
+}
