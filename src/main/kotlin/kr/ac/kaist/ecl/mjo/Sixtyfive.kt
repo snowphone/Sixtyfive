@@ -1,71 +1,47 @@
 package kr.ac.kaist.ecl.mjo
 
-import com.dropbox.core.DbxAppInfo
-import com.dropbox.core.DbxRequestConfig
-import com.dropbox.core.DbxWebAuth
-import com.dropbox.core.v2.DbxClientV2
-import com.dropbox.core.v2.files.WriteMode
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kr.ac.kaist.ecl.mjo.dropbox.AppKey
+import kr.ac.kaist.ecl.mjo.dropbox.Dropbox
 import org.slf4j.LoggerFactory
-import java.awt.Desktop
-import java.io.*
-import java.net.URI
+import java.io.FileWriter
+import java.io.InputStream
 import java.nio.file.Path
+import java.text.SimpleDateFormat
 
 class Sixtyfive(configName: String = "configs.json") {
 	private val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
-	private val uploadConfigName = "/$configName"
-	private val dropbox: DbxClientV2 = accessDropbox()
-	val config: Config = dropbox.files()
-		.downloadBuilder(uploadConfigName)
-		.start()
-		.inputStream
-		.let(::InputStreamReader)
-		.let(InputStreamReader::readText)
-		.let(Json.Default::decodeFromString)
+	private val uploadConfigName = configName
+	private val dropbox: Dropbox = accessDropbox()
+	val config: Config = dropbox.download(uploadConfigName)
+		.get()
+		.first
+		.bufferedReader()
+		.readText()
+		.apply(logger::debug)
+		.let(Json::decodeFromString)
 	private val watchList: List<String> = config
 		.applications
 		.map(AppConfig::name)
 	private val watchDog = ProcessWatchDog()
 
 
-	private fun accessDropbox(): DbxClientV2 {
-		val config = DbxRequestConfig.newBuilder(this::class.java.name).build()
+	private fun accessDropbox(): Dropbox {
 		val info = this::class.java
-			.getResourceAsStream("/key.json")
-			.let(DbxAppInfo.Reader::readFully)
+			.getResource("/key.json")
+			.readText()
+			.let<String, AppKey>(Json::decodeFromString)
 
-		val token = runCatching { tokenPath.let(::FileReader) }
-			.mapCatching(FileReader::readText)
-			.mapCatching(String::trim)
-			.getOrElse { authenticate(config, info) }
-
-		return DbxClientV2(config, token)
+		return Dropbox(info.key, info.secret)
 	}
 
-	private fun authenticate(config: DbxRequestConfig, info: DbxAppInfo): String? {
-		val auth = DbxWebAuth(config, info)
-		val url = DbxWebAuth.newRequestBuilder().withNoRedirect().build().let(auth::authorize)
-
-		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-			Desktop.getDesktop().browse(url.let(::URI))
-			logger.info("Log in from your browser and copy TOKEN to console")
-		} else {
-			logger.info("Go to '$url' and enter the access code")
-		}
-		val accessCode = readLine()?.trim()
-
-		return auth.finishFromCode(accessCode).accessToken
-			?.apply { tokenPath.let(::File).parentFile.mkdirs() }
-			?.also { tok -> tokenPath.let(::FileWriter).use { w -> w.write(tok) } }!!
-	}
 
 	init {
-		logger.info("Signed-in user: ${dropbox.users().currentAccount.name.displayName}")
+		logger.info("Signed-in user: ${dropbox.user}")
 
 		watchList.forEach {
 			watchDog.register(it) { _ ->
@@ -78,7 +54,7 @@ class Sixtyfive(configName: String = "configs.json") {
 	}
 
 	private inline val String.toZipName: String get() = this.replace(Regex("exe$"), "zip")
-	private inline val String.toUploadZipName: String get() = "/data/${this.toZipName}"
+	private inline val String.toUploadZipName: String get() = "data/${this.toZipName}"
 
 	private fun sync(processName: String) {
 		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
@@ -112,13 +88,18 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	fun watchProcesses() = watchDog.start()
 
-	private fun downloadAppData(processName: String): Pair<ByteArrayInputStream, Long>? = ByteArrayOutputStream()
-		.runCatching {
-			val metadata = dropbox.files().downloadBuilder(processName.toUploadZipName).download(this)
-			this to metadata
-		}.mapCatching { it.first.toByteArray().inputStream() to it.second }
-		.mapCatching { it.first to it.second.serverModified.time }
-		.getOrNull()
+	private fun downloadAppData(processName: String): Pair<InputStream, Long>? {
+		val (data, metadata) = dropbox.download(processName.toUploadZipName).get()
+		return metadata?.server_modified?.time
+			?.let { data to it }
+	}
+
+	private val String.time: Long
+		get() {
+			return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+				.parse(this)
+				.time
+		}
 
 	fun restore(processName: String) {
 		when (val pair = downloadAppData(processName)) {
@@ -150,12 +131,11 @@ class Sixtyfive(configName: String = "configs.json") {
 			?.expand
 			?.let(::pack)
 
-		val metadata = dropbox.files()
-			.uploadBuilder(processName.toUploadZipName)
-			.withMode(WriteMode.OVERWRITE)
-			.uploadAndFinish(localData)
+		val metadata = localData
+			?.let { dropbox.upload(it, processName.toUploadZipName) }
 
-		config[processName] = metadata.serverModified.time
+		metadata?.get()?.server_modified?.time
+			?.let { config[processName] = it }
 		updateConfig()
 
 		logger.info("$processName is backed up")
@@ -169,11 +149,7 @@ class Sixtyfive(configName: String = "configs.json") {
 	}
 
 	private fun updateConfig() {
-		dropbox
-			.files()
-			.uploadBuilder(uploadConfigName)
-			.withMode(WriteMode.OVERWRITE)
-			.uploadAndFinish(Json.encodeToString(config).byteInputStream())
+		dropbox.upload(Json.encodeToString(config).byteInputStream(), uploadConfigName)
 	}
 
 	fun removeConfig(processName: String) {
