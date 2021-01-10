@@ -32,7 +32,7 @@ class ProcessWatchDog {
 				.filter(ProcessHandle::isAlive)
 				.filter { it.name in notYetRegistered }
 				.peek { logger.info("${it.name} has started") }
-				.peek { it.onExit().thenAcceptAsync(callbackList[it.name]) }
+				.peek { it.onExit().thenAccept(callbackList[it.name]) }
 				.forEach { notYetRegistered.remove(it.name) }
 		}
 	}

@@ -30,10 +30,10 @@ class Dropbox(key: String, secret: String) {
 	private var token: String = try {
 		FileReader(tokenPath)
 			.readText()
-			.apply(logger::info)
+			.apply(logger::debug)
 			.trim()
 	} catch (e: Exception) {
-		logger.debug("Failed to read token")
+		logger.info("Failed to read token")
 		issueToken(key, secret)
 	}
 

@@ -5,19 +5,23 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kr.ac.kaist.ecl.mjo.dropbox.AppKey
 import kr.ac.kaist.ecl.mjo.dropbox.Dropbox
+import kr.ac.kaist.ecl.mjo.dropbox.Response
 import org.slf4j.LoggerFactory
 import java.io.FileWriter
 import java.io.InputStream
 import java.nio.file.Path
 import java.text.SimpleDateFormat
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletableFuture.completedFuture
 
+// TODO: 코드 리팩토링하기
 class Sixtyfive(configName: String = "configs.json") {
-	private val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
 	private val uploadConfigName = configName
 	private val dropbox: Dropbox = accessDropbox()
-	val config: Config = dropbox.download(uploadConfigName)
+	val config: Config = dropbox
+		.download(uploadConfigName)
 		.get()
 		.first
 		.bufferedReader()
@@ -46,86 +50,104 @@ class Sixtyfive(configName: String = "configs.json") {
 		watchList.forEach {
 			watchDog.register(it) { _ ->
 				logger.info("$it has terminated")
-				backup(it)
+				backup(it).join()
 			}
 		}
 
-		watchList.parallelStream().forEach(this::sync)
+		watchList.map(this::sync).run { CompletableFuture.allOf(*toTypedArray()).join() }
 	}
 
 	private inline val String.toZipName: String get() = this.replace(Regex("exe$"), "zip")
 	private inline val String.toUploadZipName: String get() = "data/${this.toZipName}"
 
-	private fun sync(processName: String) {
+	private fun sync(processName: String): CompletableFuture<Void>? {
 		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
-		val (remoteData, uploadedTime) = when (val pair = downloadAppData(processName)) {
-			null -> {
-				logger.warn("Failed to download $processName from dropbox")
-				return
+
+		return downloadAppData(processName)
+			.thenComposeAsync {
+				when (it) {
+					null -> {
+						logger.warn("Failed to download $processName from dropbox")
+						null
+					}
+					else -> {
+						logger.debug("$processName is well downloaded")
+						completedFuture(it)    // remote data, uploadedTime
+					}
+				}
+			}?.thenComposeAsync { (remoteData, uploadedTime) ->
+				if (localModifiedTime != null) {
+					when (localModifiedTime.compareTo(uploadedTime)) {
+						in 1 until Int.MAX_VALUE -> restore(processName)
+						in -1 downTo Int.MIN_VALUE -> backup(processName)
+						else -> {
+							logger.info("$processName has not changed")
+							completedFuture(null)
+						}
+					}
+				} else {
+					val localPath = config[processName]?.savePath?.toZipName
+					if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
+						val backupPath = "${localPath}.bak.zip"
+						logger.info("Local data exist. Save backup at $backupPath.")
+						FileWriter(backupPath).use {
+							it.write(pack(localPath).readAllBytes().toString())
+						}
+						completedFuture(null)
+					} else {
+						logger.info("${processName.toZipName} does not exist in local. Download from remote")
+						restore(processName, remoteData, uploadedTime)
+					}
+
+				}
 			}
-			else -> pair
-		}
-		if (localModifiedTime != null) {
-			when (localModifiedTime.compareTo(uploadedTime)) {
-				in 1 until Int.MAX_VALUE -> restore(processName)
-				in -1 downTo Int.MIN_VALUE -> backup(processName)
-				0 -> logger.info("$processName has not changed")
-			}
-		} else {
-			val localPath = config[processName]?.savePath?.toZipName
-			if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
-				val backupPath = "${localPath}.bak.zip"
-				logger.info("Local data exist. Save backup at $backupPath.")
-				val writer = FileWriter(backupPath)
-				writer.write(pack(localPath).readAllBytes().toString())
-				writer.close()
-			} else {
-				logger.info("${processName.toZipName} does not exist in local. Download from remote")
-				restore(processName, remoteData, uploadedTime)
-			}
-		}
 	}
 
 	fun watchProcesses() = watchDog.start()
 
-	private fun downloadAppData(processName: String): Pair<InputStream, Long>? {
-		val (data, metadata) = dropbox.download(processName.toUploadZipName).get()
-		return metadata?.server_modified?.time
-			?.let { data to it }
+	private fun downloadAppData(processName: String): CompletableFuture<Pair<InputStream, Long>?> {
+		return dropbox.download(processName.toUploadZipName)
+			.thenApply { (data, resp) ->
+				resp?.server_modified?.time?.let { data to it }
+			}
 	}
 
 	private val String.time: Long
-		get() {
-			return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
-				.parse(this)
-				.time
-		}
+		get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+			.parse(this)
+			.time
 
-	fun restore(processName: String) {
-		when (val pair = downloadAppData(processName)) {
-			null -> {
-				logger.warn("Failed to download $processName from dropbox")
-				return
+	fun restore(processName: String): CompletableFuture<Void> {
+		return downloadAppData(processName)
+			.thenComposeAsync {
+				when (it) {
+					null -> {
+						logger.warn("Failed to download $processName from dropbox")
+						completedFuture(null)
+					}
+					else -> {
+						logger.debug("Downloaded ${processName.toZipName} from dropbox")
+						restore(processName, it.first, it.second)
+					}
+				}
 			}
-			else -> {
-				logger.debug("Downloaded ${processName.toZipName} from dropbox")
-				restore(processName, pair.first, pair.second)
-			}
-		}
 	}
 
-	private fun restore(processName: String, remoteData: InputStream, uploadedTime: Long) {
-		config[processName]
-			?.savePath
-			?.expand
+	private fun restore(processName: String, remoteData: InputStream, uploadedTime: Long): CompletableFuture<Void> {
+		val conf = config[processName]
+
+		return conf?.savePath?.expand
 			?.also { unpack(remoteData, it) }
-			?.also { config[processName]!!.lastModified[hostName] = uploadedTime }
-			?.also { updateConfig() }
-			?.run { logger.info("$processName is successfully restored") }
-			?: logger.warn("$processName does not exists")
+			?.also { conf.lastModified[hostName] = uploadedTime }
+			?.run { updateConfig() }
+			?.thenAccept { logger.info("$processName is successfully restored") }
+			?: run {
+				logger.warn("$processName does not exists")
+				completedFuture(null)
+			}
 	}
 
-	fun backup(processName: String) {
+	fun backup(processName: String): CompletableFuture<Void> {
 		val localData = config[processName]
 			?.savePath
 			?.expand
@@ -136,29 +158,28 @@ class Sixtyfive(configName: String = "configs.json") {
 
 		metadata?.get()?.server_modified?.time
 			?.let { config[processName] = it }
-		updateConfig()
 
-		logger.info("$processName is backed up")
+		return updateConfig().thenAccept { logger.info("$processName has backed up") }
 	}
 
-	fun addConfig(processName: String, path: String) {
+	fun addConfig(processName: String, path: String): CompletableFuture<Void> {
 		logger.info("Process: $processName  path: $path")
 		config[processName] = AppConfig(processName, path, mutableMapOf())
-		updateConfig()
-		logger.info("Configuration is updated")
+		return updateConfig()
+			.thenAccept { logger.info("Configuration is updated") }
 	}
 
-	private fun updateConfig() {
-		dropbox.upload(Json.encodeToString(config).byteInputStream(), uploadConfigName)
+	private fun updateConfig(): CompletableFuture<Response?> {
+		return dropbox.upload(Json.encodeToString(config).byteInputStream(), uploadConfigName)
 	}
 
-	fun removeConfig(processName: String) {
-		config[processName]
-			?.also { config.applications.remove(it) }
-			?.also { updateConfig() }
-			?.also { logger.info("$it is successfully popped") }
-			?: logger.warn("$processName does not exist")
-	}
+	fun removeConfig(processName: String): CompletableFuture<Void> = config[processName]
+		?.also { config.applications.remove(it) }
+		?.run { updateConfig().thenAccept { logger.info("$this is successfully popped") } }
+		?: run {
+			logger.warn("$processName does not exist")
+			completedFuture(null)
+		}
 
 }
 
