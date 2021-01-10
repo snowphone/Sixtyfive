@@ -78,8 +78,8 @@ class Sixtyfive(configName: String = "configs.json") {
 			}?.thenCompose { (remoteData, uploadedTime) ->
 				if (localModifiedTime != null) {
 					when {
-						localModifiedTime < uploadedTime -> backup(processName)
-						localModifiedTime > uploadedTime -> restore(processName)
+						localModifiedTime < uploadedTime -> restore(processName)
+						localModifiedTime > uploadedTime -> backup(processName)
 						else -> {
 							logger.info("$processName has not changed")
 							completedFuture(null)
