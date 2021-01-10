@@ -5,7 +5,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kr.ac.kaist.ecl.mjo.expand
 import org.slf4j.LoggerFactory
 import java.awt.Desktop
 import java.io.FileReader
@@ -17,10 +16,9 @@ import java.net.http.HttpResponse.BodyHandlers
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.CompletableFuture
 
-class Dropbox(key: String, secret: String) {
+class Dropbox(key: String, secret: String, private val tokenPath: String) {
 	private val logger = LoggerFactory.getLogger(this::class.java)
 	private val client = Http()
-	private val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
 	private val baseHeader: Map<String, String>
 		get() = mapOf(
 			"Authorization" to "Bearer $token",

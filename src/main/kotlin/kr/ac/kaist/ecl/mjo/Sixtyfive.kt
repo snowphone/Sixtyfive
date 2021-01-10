@@ -36,12 +36,13 @@ class Sixtyfive(configName: String = "configs.json") {
 
 
 	private fun accessDropbox(): Dropbox {
+		val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
 		val info = this::class.java
 			.getResource("/key.json")
 			.readText()
 			.let<String, AppKey>(Json::decodeFromString)
 
-		return Dropbox(info.key, info.secret)
+		return Dropbox(info.key, info.secret, tokenPath)
 	}
 
 
