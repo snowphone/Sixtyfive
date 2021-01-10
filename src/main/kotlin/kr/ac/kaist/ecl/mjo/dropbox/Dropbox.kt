@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.CompletableFuture
 
 class Dropbox(key: String, secret: String, private val tokenPath: String) {
+
 	private val logger = LoggerFactory.getLogger(this::class.java)
 	private val client = Http()
 	private val baseHeader: Map<String, String>
@@ -24,34 +25,35 @@ class Dropbox(key: String, secret: String, private val tokenPath: String) {
 			"Authorization" to "Bearer $token",
 			"Content-Type" to "application/octet-stream",
 		)
-
 	private var token: String = try {
 		FileReader(tokenPath)
-			.readText()
-			.apply(logger::debug)
-			.trim()
+			.readText().trim()
+			.let {
+				if (authenticateToken(it)) it
+				else logger.warn("Token is not valid")
+					.run { issueToken(key, secret) }
+			}
 	} catch (e: Exception) {
 		logger.info("Failed to read token")
 		issueToken(key, secret)
 	}
+	val user = getUser(token)
 
-	init {
-		if (!authenticateToken()) {
-			logger.debug("Token is not valid")
-			token = issueToken(key, secret)
-		}
+
+	private fun authenticateToken(token: String): Boolean = getUser(token) != null
+
+	private fun getUser(token: String): String? {
+		return "https://api.dropboxapi.com/2/users/get_current_account"
+			.let { client.postAsync(it, headers = mapOf("Authorization" to "Bearer $token")) }
+			.get()
+			.body()
+			.let { URLDecoder.decode(it, UTF_8) }
+			.let(Json::parseToJsonElement)
+			.jsonObject["name"]
+			?.jsonObject?.get("display_name")
+			?.jsonPrimitive
+			?.content
 	}
-
-	val user = "https://api.dropboxapi.com/2/users/get_current_account"
-		.let { client.postAsync(it, headers = mapOf("Authorization" to "Bearer $token")) }
-		.get()
-		.body()
-		.let { URLDecoder.decode(it, UTF_8) }
-		.let(Json::parseToJsonElement)
-		.jsonObject["name"]!!
-		.jsonObject["display_name"]!!
-		.jsonPrimitive
-		.content
 
 	private fun issueToken(key: String, secret: String): String {
 		val requestUrl = "https://www.dropbox.com/oauth2/authorize?client_id=$key&response_type=code"
@@ -77,21 +79,12 @@ class Dropbox(key: String, secret: String, private val tokenPath: String) {
 			.jsonPrimitive
 			.content
 
-		logger.info("Issued token: $token")
+		logger.info("Issued token will be stored at $tokenPath")
 		FileWriter(tokenPath)
 			.use { it.write(token) }
 
 		return token
 	}
-
-
-	private fun authenticateToken(): Boolean {
-		val url = "https://api.dropboxapi.com/2/users/get_current_account"
-		val resp = client.postAsync(url, headers = mapOf("Authorization" to "Bearer $token")).get()
-
-		return resp.statusCode() in 200 until 300
-	}
-
 
 	fun download(fileName: String): CompletableFuture<Pair<InputStream, Response?>> {
 		val url = "https://content.dropboxapi.com/2/files/download"
