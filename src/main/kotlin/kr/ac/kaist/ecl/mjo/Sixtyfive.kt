@@ -43,15 +43,10 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	init {
 		logger.info("Signed-in user: ${dropbox.user}")
-
-		watchList.forEach {
-			watchDog.register(it) { _ ->
-				logger.info("$it has terminated")
-				backup(it).join()
-			}
-		}
+		watchList.forEach { watchDog.register(it, this::callback) }
 		syncAll()
 	}
+
 
 	private fun accessDropbox(): Dropbox {
 		val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
@@ -61,6 +56,13 @@ class Sixtyfive(configName: String = "configs.json") {
 			.let<String, AppKey>(Json::decodeFromString)
 
 		return Dropbox(info.key, info.secret, tokenPath)
+	}
+
+	private fun callback(procName: String) {
+		logger.info("$procName has terminated")
+		watchDog.register(procName, this::callback)
+		logger.debug("Re-registered $procName")
+		backup(procName).join()
 	}
 
 	private fun syncAll() = watchList.map(this::sync).run { CompletableFuture.allOf(*toTypedArray()).join() }
