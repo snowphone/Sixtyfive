@@ -9,17 +9,12 @@ import java.util.function.Consumer
 
 
 class ProcessWatchDog {
-	private val ProcessHandle.name: String
-		get() = this.info()
-			.command()
-			.orElse("")
-			.let(::File)
-			.let(File::getName)
 
 	private val logger = LoggerFactory.getLogger(this::class.java)
 
 	private val notYetRegisteredProcessList = CopyOnWriteArraySet<String>()
 	private val callbackMap = ConcurrentHashMap<String, Consumer<String>>()
+	private inline val ProcessHandle.name: String get() = this.info().command().orElse("").let { File(it).name }
 
 
 	fun register(processName: String, onExitCallBack: Consumer<String>) {

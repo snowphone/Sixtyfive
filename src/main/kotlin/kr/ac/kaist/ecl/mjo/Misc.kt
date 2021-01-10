@@ -12,8 +12,7 @@ import java.nio.file.Paths
  * Expands environment variables to their corresponding value.
  * It also expands %STEAM%, pointing "<STEAM>/steamapps/common".
  */
-val String.expand: String
-	get() = this.replace(Regex("%(.*?)%")) { envs[it.groupValues[1]]!! }
+val String.expand: String get() = this.replace(Regex("%(.*?)%")) { envs[it.groupValues[1]]!! }
 
 
 val steamDirectory = Runtime
@@ -26,9 +25,7 @@ val steamDirectory = Runtime
 	.let { Paths.get(it, "steamapps", "common").toString() }
 
 private val envs = System.getenv().toMutableMap()
-	.also {
-		it["STEAM"] = steamDirectory
-	}
+	.also { it["STEAM"] = steamDirectory }
 
 
 fun pack(rootDir: String): InputStream = ByteArrayOutputStream()
@@ -40,5 +37,4 @@ fun unpack(inputStream: InputStream, dst: String) {
 	ZipUtil.unpack(inputStream, File(dst))
 }
 
-val hostName: String
-	get() = InetAddress.getLocalHost().hostName!!
+val hostName: String get() = InetAddress.getLocalHost().hostName!!

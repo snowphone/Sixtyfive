@@ -10,8 +10,8 @@ import org.slf4j.LoggerFactory
 import java.io.FileWriter
 import java.io.InputStream
 import java.nio.file.Path
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+import java.time.Instant
+import java.time.format.DateTimeFormatter.ISO_DATE_TIME
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
 
@@ -35,11 +35,7 @@ class Sixtyfive(configName: String = "configs.json") {
 	private val watchDog = ProcessWatchDog()
 	private inline val String.toZipName: String get() = this.replace(Regex("exe$"), "zip")
 	private inline val String.toUploadZipName: String get() = "data/${this.toZipName}"
-	private inline val String.time: Long
-		get() = ZonedDateTime
-			.parse(this, DateTimeFormatter.ISO_DATE_TIME)
-			.toInstant()
-			.toEpochMilli()
+	private inline val String.time: Long get() = Instant.from(ISO_DATE_TIME.parse(this)).toEpochMilli()
 
 	init {
 		logger.info("Signed-in user: ${dropbox.user}")
