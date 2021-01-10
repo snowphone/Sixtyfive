@@ -173,7 +173,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		}
 
 	private fun updateConfig(): CompletableFuture<Response?> {
-		return dropbox.upload(Json.encodeToString(config).byteInputStream(), uploadConfigName)
+		return dropbox.upload(Json { prettyPrint = true }.encodeToString(config).byteInputStream(), uploadConfigName)
 	}
 }
 
