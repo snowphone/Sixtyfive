@@ -10,7 +10,8 @@ import org.slf4j.LoggerFactory
 import java.io.FileWriter
 import java.io.InputStream
 import java.nio.file.Path
-import java.text.SimpleDateFormat
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
 
@@ -64,22 +65,19 @@ class Sixtyfive(configName: String = "configs.json") {
 		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
 
 		return downloadAppData(processName)
-			.thenComposeAsync {
+			.thenCompose {
 				when (it) {
 					null -> {
 						logger.warn("Failed to download $processName from dropbox")
 						null
 					}
-					else -> {
-						logger.debug("$processName is well downloaded")
-						completedFuture(it)    // remote data, uploadedTime
-					}
+					else -> completedFuture(it)
 				}
-			}?.thenComposeAsync { (remoteData, uploadedTime) ->
+			}?.thenCompose { (remoteData, uploadedTime) ->
 				if (localModifiedTime != null) {
-					when (localModifiedTime.compareTo(uploadedTime)) {
-						in 1 until Int.MAX_VALUE -> restore(processName)
-						in -1 downTo Int.MIN_VALUE -> backup(processName)
+					when {
+						localModifiedTime < uploadedTime -> backup(processName)
+						localModifiedTime > uploadedTime -> restore(processName)
 						else -> {
 							logger.info("$processName has not changed")
 							completedFuture(null)
@@ -113,9 +111,10 @@ class Sixtyfive(configName: String = "configs.json") {
 	}
 
 	private val String.time: Long
-		get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
-			.parse(this)
-			.time
+		get() = ZonedDateTime
+			.parse(this, DateTimeFormatter.ISO_DATE_TIME)
+			.toInstant()
+			.toEpochMilli()
 
 	fun restore(processName: String): CompletableFuture<Void> {
 		return downloadAppData(processName)
