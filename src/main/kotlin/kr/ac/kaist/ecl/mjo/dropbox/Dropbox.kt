@@ -37,12 +37,12 @@ class Dropbox(key: String, secret: String, private val tokenPath: String) {
 		logger.info("Failed to read token")
 		issueToken(key, secret)
 	}
-	val user = getUser(token)
+	val user = fetchUser(token)
 
 
-	private fun authenticateToken(token: String): Boolean = getUser(token) != null
+	private fun authenticateToken(token: String): Boolean = fetchUser(token) != null
 
-	private fun getUser(token: String): String? {
+	private fun fetchUser(token: String): String? {
 		return "https://api.dropboxapi.com/2/users/get_current_account"
 			.let { client.postAsync(it, headers = mapOf("Authorization" to "Bearer $token")) }
 			.get()
@@ -100,22 +100,29 @@ class Dropbox(key: String, secret: String, private val tokenPath: String) {
 	}
 
 	fun upload(data: InputStream, fileName: String): CompletableFuture<Response?> {
-		val headers = baseHeader.toMutableMap()
-		//headers["Dropbox-API-Arg"] = URLEncoder.encode(Json.encodeToString(mapOf("path" to "/$fileName")), StandardCharsets.UTF_8)
-		headers["mode"] = Json.encodeToString(mapOf(".tag" to "overwrite"))
 		val url = "https://content.dropboxapi.com/2/files/upload"
 		// Since http header cannot handle non-ascii characters correctly, any
 		// characters whose codepoint is bigger than 0x7F should have been escaped.
 		// But, both of kotlinx-serialization and Gson do not support this kind
 		// of http-header-safe-serialization, I chose to use an alternative: `arg` URL parameter.
-		val params = mapOf("arg" to Json.encodeToString(mapOf("path" to "/$fileName")))
+		val params = mapOf(
+			"arg" to Json.encodeToString(
+				mapOf(
+					"path" to "/$fileName",
+					"mode" to "overwrite",
+				)
+			)
+		)
 
-		return client.postAsync(url, headers = headers, params = params, data = data)
+		return client.postAsync(url, headers = baseHeader, params = params, data = data)
 			.thenApply {
 				when (it.statusCode()) {
 					in 200 until 300 -> URLDecoder.decode(it.body(), UTF_8)
 						.let<String, Response>(Json::decodeFromString)
-					else -> null
+					else -> {
+						logger.warn("Error occurred while uploading. Status code: ${it.statusCode()}, reason: ${it.body()}")
+						null
+					}
 				}
 			}
 	}

@@ -61,7 +61,9 @@ class Sixtyfive(configName: String = "configs.json") {
 		backup(procName).join()
 	}
 
-	private fun syncAll() = watchList.map(this::sync).run { CompletableFuture.allOf(*toTypedArray()).join() }
+	private fun syncAll() = watchList
+		.map(this::sync)
+		.let { CompletableFuture.allOf(*it.toTypedArray()).thenAccept { updateConfig() }.join() }
 
 	private fun sync(processName: String): CompletableFuture<Void>? {
 		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
@@ -173,7 +175,13 @@ class Sixtyfive(configName: String = "configs.json") {
 		}
 
 	private fun updateConfig(): CompletableFuture<Response?> {
-		return dropbox.upload(Json { prettyPrint = true }.encodeToString(config).byteInputStream(), uploadConfigName)
+		return config
+			.let { Json { prettyPrint = true }.encodeToString(it).byteInputStream() }
+			.let { dropbox.upload(it, uploadConfigName) }
+			.thenApply {
+				logger.debug("Configuration updated at timestamp ${it?.server_modified}")
+				it
+			}
 	}
 }
 
