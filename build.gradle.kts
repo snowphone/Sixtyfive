@@ -17,7 +17,7 @@ dependencies {
 	implementation("org.codehaus.httpcache4j.uribuilder:uribuilder:2.0.0")
 	implementation("com.google.code.gson:gson:2.8.6")
 
-	implementation("com.github.snowphone:async-dropbox:0.3")
+	implementation("com.github.snowphone:async-dropbox:0.3.1")
 
 	implementation("org.jsoup:jsoup:1.13.1")
 

@@ -1,6 +1,5 @@
 package kr.sixtyfive
 
-import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import org.slf4j.LoggerFactory
 import java.io.FileReader
@@ -13,7 +12,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
 
 class Sixtyfive(configName: String = "configs.json") {
-
+	private val gson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
 
 	private val logger = LoggerFactory.getLogger(this::class.java)
 	private val uploadConfigName = configName
@@ -25,7 +24,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		.bufferedReader()
 		.readText()
 		.apply(logger::debug)
-		.let { Gson().fromJson(it, Config::class.java) }
+		.let { gson.fromJson(it, Config::class.java) }
 	private val watchList: List<String> = config
 		.applications
 		.map(AppConfig::name)
@@ -52,7 +51,7 @@ class Sixtyfive(configName: String = "configs.json") {
 			val (key, secret) = this::class.java
 				.getResource("/key.json")
 				?.readText()
-				.let { Gson().fromJson(it, Map::class.java) }
+				.let { gson.fromJson(it, Map::class.java) }
 				.apply(::println)
 				.let { it["key"]!! as String to it["secret"]!! as String }
 
@@ -182,7 +181,7 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	private fun updateConfig(): CompletableFuture<Response?> {
 		return config
-			.let { GsonBuilder().setPrettyPrinting().create().toJson(it).byteInputStream() }
+			.let { gson.toJson(it).byteInputStream() }
 			.let { dropbox.upload(it, uploadConfigName) }
 			.thenApply {
 				logger.debug("Configuration updated at timestamp ${it?.server_modified}")
