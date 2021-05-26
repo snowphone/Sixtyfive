@@ -1,25 +1,25 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-	kotlin("jvm") version "1.4.20"
-	kotlin("plugin.serialization") version "1.4.10"
+	kotlin("jvm") version "1.5.10"
 	id("org.beryx.runtime") version "1.11.4"
 
 	application
 }
-group = "kr.ac.kaist.ecl.mjo"
+group = "kr.sixtyfive"
 version = "1.0"
 
 repositories {
-	jcenter()
+	mavenCentral()
+	maven { url = "https://jitpack.io".let(::uri) }
 }
 dependencies {
 	implementation("org.codehaus.httpcache4j.uribuilder:uribuilder:2.0.0")
-	implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
+	implementation("com.google.code.gson:gson:2.8.6")
+
+	implementation("com.github.snowphone:async-dropbox:0.3")
 
 	implementation("org.jsoup:jsoup:1.13.1")
-
-	implementation("com.dropbox.core:dropbox-core-sdk:3.1.5")
 
 	implementation("org.zeroturnaround:zt-zip:1.14")
 

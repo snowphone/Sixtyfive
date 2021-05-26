@@ -1,4 +1,4 @@
-package kr.ac.kaist.ecl.mjo
+package kr.sixtyfive
 
 import org.slf4j.LoggerFactory
 import java.io.File

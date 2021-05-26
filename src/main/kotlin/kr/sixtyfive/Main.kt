@@ -1,4 +1,4 @@
-package kr.ac.kaist.ecl.mjo
+package kr.sixtyfive
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.associate
@@ -59,7 +59,7 @@ class Main : CliktCommand(name = "Sixtyfive") {
 
 			path.isNotEmpty() -> sixtyfive
 				.config.applications.firstOrNull { it.name == path }
-				?.savePath
+				?.save_path
 				?.expand
 				?.let { logger.info("$path: $it") }
 

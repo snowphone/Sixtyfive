@@ -1,4 +1,4 @@
-package kr.ac.kaist.ecl.mjo
+package kr.sixtyfive
 
 import org.zeroturnaround.zip.ZipUtil
 import java.io.BufferedReader

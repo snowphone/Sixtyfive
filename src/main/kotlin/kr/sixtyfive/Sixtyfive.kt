@@ -1,12 +1,9 @@
-package kr.ac.kaist.ecl.mjo
+package kr.sixtyfive
 
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kr.ac.kaist.ecl.mjo.dropbox.AppKey
-import kr.ac.kaist.ecl.mjo.dropbox.Dropbox
-import kr.ac.kaist.ecl.mjo.dropbox.Response
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import org.slf4j.LoggerFactory
+import java.io.FileReader
 import java.io.FileWriter
 import java.io.InputStream
 import java.nio.file.Path
@@ -20,7 +17,7 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	private val logger = LoggerFactory.getLogger(this::class.java)
 	private val uploadConfigName = configName
-	private val dropbox: Dropbox = accessDropbox()
+	private val dropbox = accessDropbox()
 	val config: Config = dropbox
 		.download(uploadConfigName)
 		.get()
@@ -28,7 +25,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		.bufferedReader()
 		.readText()
 		.apply(logger::debug)
-		.let(Json::decodeFromString)
+		.let { Gson().fromJson(it, Config::class.java) }
 	private val watchList: List<String> = config
 		.applications
 		.map(AppConfig::name)
@@ -46,12 +43,21 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	private fun accessDropbox(): Dropbox {
 		val tokenPath = "%LOCALAPPDATA%/Sixtyfive/token.txt".expand
-		val info = this::class.java
-			.getResource("/key.json")
-			.readText()
-			.let<String, AppKey>(Json::decodeFromString)
+		return try {
+			tokenPath.let(::FileReader)
+				.readText()
+				.trim()
+				.let(::Dropbox)
+		} catch (e: Exception) {
+			val (key, secret) = this::class.java
+				.getResource("/key.json")
+				?.readText()
+				.let { Gson().fromJson(it, Map::class.java) }
+				.apply(::println)
+				.let { it["key"]!! as String to it["secret"]!! as String }
 
-		return Dropbox(info.key, info.secret, tokenPath)
+			Dropbox(key, secret, tokenPath)
+		}
 	}
 
 	private fun callback(procName: String) {
@@ -66,7 +72,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		.let { CompletableFuture.allOf(*it.toTypedArray()).thenAccept { updateConfig() }.join() }
 
 	private fun sync(processName: String): CompletableFuture<Void>? {
-		val localModifiedTime = config[processName]?.lastModified?.get(hostName)
+		val localModifiedTime = config[processName]?.last_modified?.get(hostName)
 
 		return downloadAppData(processName)
 			.thenCompose {
@@ -88,7 +94,7 @@ class Sixtyfive(configName: String = "configs.json") {
 						}
 					}
 				} else {
-					val localPath = config[processName]?.savePath?.toZipName
+					val localPath = config[processName]?.save_path?.toZipName
 					if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
 						val backupPath = "${localPath}.bak.zip"
 						logger.info("Local data exist. Save backup at $backupPath.")
@@ -133,9 +139,9 @@ class Sixtyfive(configName: String = "configs.json") {
 	private fun restore(processName: String, remoteData: InputStream, uploadedTime: Long): CompletableFuture<Void> {
 		val conf = config[processName]
 
-		return conf?.savePath?.expand
+		return conf?.save_path?.expand
 			?.also { unpack(remoteData, it) }
-			?.also { conf.lastModified[hostName] = uploadedTime }
+			?.also { conf.last_modified[hostName] = uploadedTime }
 			?.run { updateConfig() }
 			?.thenAccept { logger.info("$processName is successfully restored") }
 			?: run {
@@ -146,7 +152,7 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	fun backup(processName: String): CompletableFuture<Void> {
 		val localData = config[processName]
-			?.savePath
+			?.save_path
 			?.expand
 			?.let(::pack)
 
@@ -176,7 +182,7 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	private fun updateConfig(): CompletableFuture<Response?> {
 		return config
-			.let { Json { prettyPrint = true }.encodeToString(it).byteInputStream() }
+			.let { GsonBuilder().setPrettyPrinting().create().toJson(it).byteInputStream() }
 			.let { dropbox.upload(it, uploadConfigName) }
 			.thenApply {
 				logger.debug("Configuration updated at timestamp ${it?.server_modified}")

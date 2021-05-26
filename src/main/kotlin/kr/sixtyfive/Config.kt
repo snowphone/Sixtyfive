@@ -1,8 +1,5 @@
-package kr.ac.kaist.ecl.mjo
+package kr.sixtyfive
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class Config(val applications: MutableList<AppConfig>) {
 	override fun toString(): String {
 		val len = this
@@ -11,9 +8,9 @@ data class Config(val applications: MutableList<AppConfig>) {
 			.maxOf(String::length)
 
 		return applications
-			.fold(StringBuilder(), { acc, it ->
-				acc.appendLine("${it.name.padEnd(len)}: ${it.savePath}")
-			})
+			.fold(StringBuilder()) { acc, it ->
+				acc.appendLine("${it.name.padEnd(len)}: ${it.save_path}")
+			}
 			.toString()
 	}
 
@@ -26,7 +23,7 @@ data class Config(val applications: MutableList<AppConfig>) {
 	 * Updates current host's last modified time
 	 */
 	operator fun set(processName: String, lastModifiedTime: Long) {
-		this[processName]?.lastModified?.put(hostName, lastModifiedTime)
+		this[processName]?.last_modified?.put(hostName, lastModifiedTime)
 	}
 
 	/**
