@@ -21,7 +21,7 @@ val steamDirectory = Runtime
 	.let(Process::getInputStream)
 	.let(InputStream::bufferedReader)
 	.let(BufferedReader::readText)
-	.let { Regex("(?<=REG_SZ).*").find(it)!!.value.trim() }
+	.let { Regex("(?<=REG_SZ).*").find(it)?.value?.trim() ?: "C:\\Program Files (x86)\\Steam" }
 	.let { Paths.get(it, "steamapps", "common").toString() }
 
 private val envs = System.getenv().toMutableMap()
