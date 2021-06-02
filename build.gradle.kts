@@ -1,8 +1,6 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
 	kotlin("jvm") version "1.5.10"
-	id("org.beryx.runtime") version "1.11.4"
+	id("org.beryx.runtime") version "1.12.5"
 
 	application
 }
@@ -15,9 +13,10 @@ repositories {
 }
 dependencies {
 	implementation("org.codehaus.httpcache4j.uribuilder:uribuilder:2.0.0")
-	implementation("com.google.code.gson:gson:2.8.6")
+	implementation("com.google.code.gson:gson:2.8.7")
 
 	implementation("com.github.snowphone:async-dropbox:0.3.1")
+	implementation("com.github.snowphone:cjk-table:0.3")
 
 	implementation("org.jsoup:jsoup:1.13.1")
 
@@ -31,8 +30,8 @@ dependencies {
 
 	testImplementation(kotlin("test-junit"))
 }
-tasks.withType<KotlinCompile> {
-	kotlinOptions.jvmTarget = "1.8"
+tasks.compileKotlin {
+	this.targetCompatibility = "1.8"
 }
 
 application {
@@ -52,12 +51,5 @@ runtime {
 			//"--resource-dir", "build/resources/main",
 			"--icon", "src/main/resources/icon.ico"
 		)
-	}
-}
-
-tasks.withType<JavaCompile> {
-	doFirst {
-		options.compilerArgs = listOf("--module-path", classpath.asPath)
-		classpath = files()
 	}
 }

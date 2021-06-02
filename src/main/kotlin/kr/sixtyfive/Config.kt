@@ -1,18 +1,10 @@
 package kr.sixtyfive
 
 data class Config(val applications: MutableList<AppConfig>) {
-	override fun toString(): String {
-		val len = this
-			.applications
-			.map(AppConfig::name)
-			.maxOf(String::length)
-
-		return applications
-			.fold(StringBuilder()) { acc, it ->
-				acc.appendLine("${it.name.padEnd(len)}: ${it.save_path}")
-			}
-			.toString()
-	}
+	override fun toString() = applications
+		.fold(Table().addLine()) { table, it ->
+			table.addRow(it.name, it.save_path)
+		}.addLine().render()
 
 	/**
 	 * Gets an app configuration whose name is `processName`

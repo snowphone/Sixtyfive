@@ -54,8 +54,7 @@ class Main : CliktCommand(name = "Sixtyfive") {
 			list -> sixtyfive
 				.config
 				.toString()
-				.split('\n')
-				.forEach(logger::info)
+				.let(::println)
 
 			path.isNotEmpty() -> sixtyfive
 				.config.applications.firstOrNull { it.name == path }
