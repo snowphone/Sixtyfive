@@ -2,6 +2,7 @@ package kr.sixtyfive
 
 import com.google.gson.GsonBuilder
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
 import java.io.InputStream
@@ -72,38 +73,37 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	private fun sync(processName: String): CompletableFuture<Void>? {
 		val localModifiedTime = config[processName]?.last_modified?.get(hostName)
+			?: let {
+				logger.info("$processName hasn't been synchronized")
+				getLastModifiedTime(config[processName]?.save_path?.expand!!)
+			}
 
 		return downloadAppData(processName)
 			?.thenCompose { (remoteData, uploadedTime) ->
-				if (localModifiedTime != null) {
-					when {
-						localModifiedTime < uploadedTime -> restore(processName)
-						localModifiedTime > uploadedTime -> backup(processName)
-						else -> {
-							logger.info("$processName has not changed")
-							completedFuture(null)
-						}
-					}
-				} else {
-					val localPath = config[processName]?.save_path?.toZipName
-					if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
-						backupLegacy(localPath)
-						completedFuture(null)
-					} else {
+				when {
+					localModifiedTime == null -> {
 						logger.info("${processName.toZipName} does not exist in local. Download from remote")
 						restore(processName, remoteData, uploadedTime)
 					}
-
+					localModifiedTime < uploadedTime -> restore(processName)
+					localModifiedTime > uploadedTime -> backup(processName)
+					else -> {
+						logger.info("$processName has not changed")
+						completedFuture(null)
+					}
 				}
 			}
 	}
 
-	private fun backupLegacy(localPath: String) {
-		val backupPath = "${localPath}.bak.zip"
-		logger.info("Local data exist. Save backup at $backupPath.")
-		FileWriter(backupPath).use {
-			it.write(pack(localPath).readAllBytes().toString())
-		}
+	/**
+	 * Iterate whole files in a directory and return the latest modified time in epoch-milli granularity.
+	 */
+	private fun getLastModifiedTime(localDirPath: String): Long? {
+		return File(localDirPath)
+			.walk()
+			.asSequence()
+			.map { it.lastModified() }
+			.maxOrNull()
 	}
 
 	fun watchProcesses() = watchDog.start()
