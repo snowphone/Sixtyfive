@@ -130,7 +130,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		val conf = config[processName]
 
 		return conf?.save_path?.expand
-			?.also { unpack(remoteData, it) }
+			?.let { unpack(remoteData, it) }
 			?.also { conf.last_modified[hostName] = uploadedTime }
 			?.run { updateConfig() }
 			?.thenAccept { logger.info("$processName is successfully restored") }

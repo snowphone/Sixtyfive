@@ -1,5 +1,6 @@
 package kr.sixtyfive
 
+import org.slf4j.LoggerFactory
 import org.zeroturnaround.zip.ZipUtil
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
@@ -33,8 +34,14 @@ fun pack(rootDir: String): InputStream = ByteArrayOutputStream()
 	.toByteArray()
 	.inputStream()
 
-fun unpack(inputStream: InputStream, dst: String) {
-	ZipUtil.unpack(inputStream, File(dst))
+fun unpack(inputStream: InputStream, dst: String): Unit? {
+	val logger = LoggerFactory.getLogger("Unpacker")
+	return logger.runCatching {
+		ZipUtil.unpack(inputStream, File(dst))
+	}.onFailure {
+		logger.error("Error occurred while unpacking an archive to $dst.")
+		logger.error(it.message)
+	}.getOrNull()
 }
 
 val hostName: String get() = InetAddress.getLocalHost().hostName!!
