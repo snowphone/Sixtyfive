@@ -149,10 +149,15 @@ class Sixtyfive(configName: String = "configs.json") {
 		val metadata = localData
 			?.let { dropbox.upload(it, processName.toUploadZipName) }
 
-		metadata?.get()?.server_modified?.time
+		return metadata?.get()?.server_modified?.time
 			?.let { config[processName] = it }
+			?.let {
+				updateConfig().thenAccept { logger.info("$processName has backed up") }
+			} ?: let {
+				logger.warn("Failed to backup $processName")
+				completedFuture(null)
+		}
 
-		return updateConfig().thenAccept { logger.info("$processName has backed up") }
 	}
 
 	fun addConfig(processName: String, path: String): CompletableFuture<Void> {
