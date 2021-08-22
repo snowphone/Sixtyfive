@@ -35,7 +35,7 @@ class Sixtyfive(configName: String = "configs.json") {
 
 	init {
 		logger.info("Signed-in user: ${dropbox.user}")
-		watchList.forEach { watchDog.register(it, this::callback) }
+		watchList.forEach { watchDog.register(it, this::processEpilogue) }
 		syncAll()
 	}
 
@@ -59,9 +59,9 @@ class Sixtyfive(configName: String = "configs.json") {
 		}
 	}
 
-	private fun callback(procName: String) {
+	private fun processEpilogue(procName: String) {
 		logger.info("$procName has terminated")
-		watchDog.register(procName, this::callback)
+		watchDog.register(procName, this::processEpilogue)
 		logger.debug("Re-registered $procName")
 		backup(procName).join()
 	}
@@ -74,15 +74,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		val localModifiedTime = config[processName]?.last_modified?.get(hostName)
 
 		return downloadAppData(processName)
-			.thenCompose {
-				when (it) {
-					null -> {
-						logger.warn("Failed to download $processName from dropbox")
-						null
-					}
-					else -> completedFuture(it)
-				}
-			}?.thenCompose { (remoteData, uploadedTime) ->
+			?.thenCompose { (remoteData, uploadedTime) ->
 				if (localModifiedTime != null) {
 					when {
 						localModifiedTime < uploadedTime -> restore(processName)
@@ -95,11 +87,7 @@ class Sixtyfive(configName: String = "configs.json") {
 				} else {
 					val localPath = config[processName]?.save_path?.toZipName
 					if (localPath?.let(Path::of)?.toFile()?.exists() == true) {
-						val backupPath = "${localPath}.bak.zip"
-						logger.info("Local data exist. Save backup at $backupPath.")
-						FileWriter(backupPath).use {
-							it.write(pack(localPath).readAllBytes().toString())
-						}
+						backupLegacy(localPath)
 						completedFuture(null)
 					} else {
 						logger.info("${processName.toZipName} does not exist in local. Download from remote")
@@ -110,29 +98,32 @@ class Sixtyfive(configName: String = "configs.json") {
 			}
 	}
 
+	private fun backupLegacy(localPath: String) {
+		val backupPath = "${localPath}.bak.zip"
+		logger.info("Local data exist. Save backup at $backupPath.")
+		FileWriter(backupPath).use {
+			it.write(pack(localPath).readAllBytes().toString())
+		}
+	}
+
 	fun watchProcesses() = watchDog.start()
 
 	fun restore(processName: String): CompletableFuture<Void> {
 		return downloadAppData(processName)
-			.thenComposeAsync {
-				when (it) {
-					null -> {
-						logger.warn("Failed to download $processName from dropbox")
-						completedFuture(null)
-					}
-					else -> {
-						logger.debug("Downloaded ${processName.toZipName} from dropbox")
-						restore(processName, it.first, it.second)
-					}
-				}
-			}
+			?.thenComposeAsync {
+				logger.debug("Downloaded ${processName.toZipName} from dropbox")
+				restore(processName, it.first, it.second)
+			} ?: completedFuture(null)
 	}
 
-	private fun downloadAppData(processName: String): CompletableFuture<Pair<InputStream, Long>?> {
+	private fun downloadAppData(processName: String): CompletableFuture<Pair<InputStream, Long>>? {
 		return dropbox.download(processName.toUploadZipName)
 			.thenApply { (data, resp) ->
 				resp?.server_modified?.time?.let { data to it }
-			}
+			} ?: let {
+			logger.warn("Failed to download $processName from dropbox")
+			null
+		}
 	}
 
 	private fun restore(processName: String, remoteData: InputStream, uploadedTime: Long): CompletableFuture<Void> {
