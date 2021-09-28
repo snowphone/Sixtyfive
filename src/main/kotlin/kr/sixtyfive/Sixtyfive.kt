@@ -4,9 +4,7 @@ import com.google.gson.GsonBuilder
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileReader
-import java.io.FileWriter
 import java.io.InputStream
-import java.nio.file.Path
 import java.time.Instant
 import java.time.format.DateTimeFormatter.ISO_DATE_TIME
 import java.util.concurrent.CompletableFuture
@@ -37,7 +35,6 @@ class Sixtyfive(configName: String = "configs.json") {
 	init {
 		logger.info("Signed-in user: ${dropbox.user}")
 		watchList.forEach { watchDog.register(it, this::processEpilogue) }
-		syncAll()
 	}
 
 
@@ -67,7 +64,7 @@ class Sixtyfive(configName: String = "configs.json") {
 		backup(procName).join()
 	}
 
-	private fun syncAll() = watchList
+	fun syncAll() = watchList
 		.map(this::sync)
 		.let { CompletableFuture.allOf(*it.toTypedArray()).thenAccept { updateConfig() }.join() }
 

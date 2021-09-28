@@ -66,7 +66,7 @@ class Main : CliktCommand(name = "Sixtyfive") {
 
 			download.isNotEmpty() -> download.let(sixtyfive::restore).join()
 
-			else -> sixtyfive.also(Sixtyfive::watchProcesses)
+			else -> sixtyfive.also { it.syncAll(); it.watchProcesses() }
 		}
 	}
 }
