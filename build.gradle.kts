@@ -1,5 +1,5 @@
 plugins {
-	kotlin("jvm") version "1.5.10"
+	kotlin("jvm") version "1.9.20"
 	id("org.beryx.runtime") version "1.12.5"
 
 	application
@@ -13,25 +13,22 @@ repositories {
 }
 dependencies {
 	implementation("org.codehaus.httpcache4j.uribuilder:uribuilder:2.0.0")
-	implementation("com.google.code.gson:gson:2.8.7")
+	implementation("com.google.code.gson:gson:2.10.1")
 
 	implementation("com.github.snowphone:async-dropbox:0.3.1")
 	implementation("com.github.snowphone:cjk-table:0.3")
 
-	implementation("org.jsoup:jsoup:1.13.1")
+	implementation("org.jsoup:jsoup:1.15.4")
 
-	implementation("org.zeroturnaround:zt-zip:1.14")
+	implementation("org.zeroturnaround:zt-zip:1.15")
 
-	implementation("ch.qos.logback:logback-classic:1.2.3")
-	implementation("org.slf4j:slf4j-api:1.7.30")
+	implementation("ch.qos.logback:logback-classic:1.4.7")
+	implementation("org.slf4j:slf4j-api:2.0.5")
 
-	implementation("com.github.ajalt.clikt:clikt:3.0.1")
+	implementation("com.github.ajalt.clikt:clikt:3.5.2")
 
 
-	testImplementation(kotlin("test-junit"))
-}
-tasks.compileKotlin {
-	this.targetCompatibility = "1.8"
+	testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.8.10")
 }
 
 application {
