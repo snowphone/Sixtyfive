@@ -1,6 +1,6 @@
 plugins {
-	kotlin("jvm") version "1.9.20"
-	id("org.beryx.runtime") version "1.12.7"
+	kotlin("jvm") version "1.5.10"
+	id("org.beryx.runtime") version "1.12.5"
 
 	application
 }
@@ -29,11 +29,6 @@ dependencies {
 
 
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.8.10")
-}
-
-java {
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 application {
