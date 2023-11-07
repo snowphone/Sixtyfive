@@ -34,10 +34,18 @@ fun pack(rootDir: String): InputStream = ByteArrayOutputStream()
 	.toByteArray()
 	.inputStream()
 
-fun unpack(inputStream: InputStream, dst: String): Unit? {
+fun packEntry(rootPath: String): InputStream = ZipUtil.packEntry(File(rootPath)).inputStream()
+
+fun unpack(inputStream: InputStream, dst: String, isFolder: Boolean): Boolean? {
 	val logger = LoggerFactory.getLogger("Unpacker")
 	return logger.runCatching {
-		ZipUtil.unpack(inputStream, File(dst))
+		if (isFolder) {
+			ZipUtil.unpack(inputStream, File(dst))
+			true
+		}
+		else {
+			ZipUtil.unpackEntry(inputStream, File(dst).name, File(dst))
+		}
 	}.onFailure {
 		logger.error("Error occurred while unpacking an archive to $dst.")
 		logger.error(it.message)
